@@ -1,5 +1,6 @@
 import numpy as np
-
+import math
+import time
 
 def arraylogexpsum(x):
     ret = x[0]
@@ -9,6 +10,7 @@ def arraylogexpsum(x):
 
 def logaddexp(a,b):
     ret = np.logaddexp(a,b)
+    return ret
     if np.isscalar(a):
         if a < -256:
             ret = b
@@ -23,199 +25,204 @@ def logaddexp(a,b):
         ret[ret<-256] = -512
         return ret
 
-def forward(observations, transitions_fn, emissions_fn, num_segments, eps=np.exp(-512)):
-    M = num_segments
-    N = observations.shape[0]
-    F = np.zeros((N,M), dtype=np.float)+eps
-    F[0,0] = 1 - F[0,:].sum() - eps
-    F = np.log(F)
+class SegmentationHMM:
+    def __init__(self, max_segments, t_stay, t_move, seg_penalty=0, prior_a=None, eps=np.exp(-512)):
+        self.eps = eps
+        self.prior_a = prior_a
+        if not prior_a is None:
+            self.prior_lognormfactor = np.log(math.gamma(2*prior_a)/(math.gamma(prior_a)**2))
+        self.num_segments = max_segments
 
-    def fwd_it(o, F):
-        for i in range(M):
-            t_stay, t_move = transitions_fn(i)
-            e = emissions_fn(i,o)
+        if t_stay + t_move + seg_penalty > 1:
+            raise ValueError('t_stay + t_move + seg_penalty may not exceed 1')
 
-            if k == 0:
-                F[k,i] = e + [0,-512,-512][i]
-                continue 
+        self.seg_penalty = np.array([(seg_penalty * i / max_segments) for i in range(max_segments)], dtype=np.float64)
+        self.t_move = np.array([t_move -self. seg_penalty[i] for i in range(max_segments)], dtype=np.float64)
+        self.t_stay = np.array([t_stay for  i in range(max_segments)], dtype=np.float64)
+        self.t_end = np.array([1-self.t_move[i]-self.t_stay[i] for i in range(max_segments)], dtype=np.float64)
+        self.t_move = np.log(self.t_move + eps)
+        self.t_stay = np.log(self.t_stay + eps)
+        self.t_end = np.log(self.t_end + eps)
 
-            F[k,i] = e + F[k-1,i] 
+    def t_fn(self, i, j):
+        if i==j:
+            return self.t_stay[i]
 
-            if i < M-1:
-                F[k,i] = F[k,i] + t_stay # we only add stay transition prob if we are not in last state
+        if j==(self.num_segments-1):
+            # Probability to go the last segment
+            return self.t_end[i]
+        if i==(j-1):
+            # Probability to move to the next state 
+            return self.t_move[i]
 
-            if i > 0:
-                F[k,i] = logaddexp(F[k,i], e + F[k-1,i-1] + t_move)
+        raise RuntimeError('Transition %d to %d is not a valid transition in segmentation HMM '%(i,j))
 
-        return F
-
-
-    for k in range(0,N):
-        F = fwd_it(observations[k],F)
-
-    evidence = F[-1,-1]
-
-    return F, evidence
-
-
-def backward(observations, transitions_fn, emissions_fn, num_segments, eps=np.exp(-512)):
-    M = num_segments
-    N = observations.shape[0]
-    B = np.zeros((N,M), dtype=np.float)+eps
-    B[-1,-1] = 1
-    B = np.log(B)
-
-
-    for k in range(N-1,0,-1):
-        o = observations[k]
-        k = k -1
-        for i in range(M):
-            t_stay, t_move = transitions_fn(i)
-            e_stay = emissions_fn(i,o)
-            if i == M-1:
-                B[k,i] = e_stay + B[k+1,i]
-            else:
-                e_move = emissions_fn(i+1,o)
-                B[k,i] = logaddexp(B[k+1,i] + t_stay + e_stay, B[k+1,i+1] + t_move + e_move)
-
-    o = observations[0]
-    evidence = B[0,0] + emissions_fn(0,o)
-    return B, evidence
-
-def viterbi(observations, transitions_fn, emissions_fn, num_segments, eps=np.exp(-512)):
-    M = num_segments
-    N = observations.shape[0]
-
-    V = np.zeros((N,M), dtype=np.float)+eps
-    V[0,0] = 1
-    V = np.log(V)
-    P = np.zeros((N,M), dtype=np.int32)
-
-    for k in range(1,N-1):
-        o = observations[k]
-        for i in range(M):
-            t_stay, t_move = transitions_fn(i)
-            e = emissions_fn(i,o)
-
-            t_stay_arr = np.log(np.zeros(M)+eps)
-            t_stay_arr[i] = t_stay
-
-            if i == 0:
-                # probability coming from start state
-                p = e + V[k-1,:] + t_stay_arr
-            else:
-                t_move_arr = np.log(np.zeros(M)+eps)
-                t_move_arr[i-1] = t_move
-
-                # probability for any state in the middle is sum of stay and move probability
-                p = e + logaddexp((V[k-1,:] + t_stay_arr), (V[k-1,:] + t_move_arr))
-            V[k,i] = np.max(p)
-            P[k,i] = np.argmax(p)
-
-    V[-1,:] = -512
-    V[-1,-1] = np.max(V[-2,:])
-    P[-1,-1] = np.argmax(V[-2,:])
-
-    X = np.zeros(N, dtype=np.int32)
-    Z = np.zeros(N, dtype=np.float32)
-    X[N-1] = M-1
-    Z[N-1] = 0
-
-    for k in range(N-2, -1, -1):
-        X[k] = P[k,X[k+1]]
-        Z[k] = V[k,X[k+1]]
-
-    return X,Z
-
-def main():
-    eps = np.exp(-512)
-    np.set_printoptions(suppress=True)
-    np.set_printoptions(precision=6)
-
-    met_comp = np.load('/home/r933r/tmp/metcomp.npy')
-    comp_samples = np.load('/home/r933r/tmp/metcomp_samples.npy')
-
-    # Methylation rate prior
-    metrate = 0.2
-    met_prob = 1-1/(1 + np.exp(-met_comp)/(1-metrate) - np.exp(-met_comp))
-
-    max_segments = 3
-
-    # Shape (M,)
-    segment_p = np.zeros(max_segments) - np.log(2)
+    def forward(self, observations, e_fn):
+        M = self.num_segments
+        R = observations.shape[0]
+        N = observations.shape[1]
+        F = np.zeros((N,M), dtype=np.float)+self.eps
+        F[0,0] = 1 - F[0,:].sum() - self.eps
+        F = np.log(F)
+        start_prob = np.zeros(M)+self.eps
+        start_prob[0] = 1
+        start_prob = np.log(start_prob)
 
 
+        for k in range(N):
+            o = observations[:,k]
+            for i in range(M):
+                e = e_fn(i,o)
 
-    # Shape (N,)
-    test_i = 1
-    signal = met_prob[test_i]
-    signal = signal[met_comp[test_i]!=0]
+                if k == 0:
+                    F[k,i] = e + start_prob[i]
+                    continue 
 
+                # Stay probability
+                F[k,i] = e + F[k-1,i] + self.t_fn(i,i)
 
-    # Test signal
-    signal = np.zeros(50)
-    signal[:10] = np.random.binomial(1,0.5,size=10)
-    signal[10:20] = np.random.binomial(1,0.95,size=10)
-    signal[20:] = np.random.binomial(1,0.5,size=30)
-#    signal[:10] = 1
-#    signal[10:20] = 0
-#    signal[20:] = np.random.binomial(1,0.3,size=30)
+                
+                # Move probabilty
+                if i > 0:
+                    F[k,i] = logaddexp(F[k,i], e + F[k-1,i-1] + self.t_fn(i-1,i))
 
-    noise = np.abs(np.random.normal(loc=0,scale=0.05,size=50))
-    signal[signal==0] = signal[signal==0] + noise[signal==0]
-    signal[signal==1] = signal[signal==1] - noise[signal==1]
-    signal = np.clip(signal,0,1)
+                # End probability
+                if i == M-1:
+                    # if end state we could have come from anywhere to the end state:
+                    for j in range(M-2): # exclude last 2 because those were already handled above
+                        F[k,i] = logaddexp(F[k,i], e + F[k-1,j] + self.t_fn(j,i))
+        evidence = F[-1,-1]
+        return F, evidence
 
-    print(signal)
+    def backward(self, observations, e_fn):
+        R = observations.shape[0]
+        M = self.num_segments
+        N = observations.shape[1]
+        B = np.zeros((N,M), dtype=np.float)+self.eps
+        B[-1,-1] = 1
+        B = np.log(B)
 
+        for k in range(N-1,0,-1):
+            o = observations[:,k]
+            k = k -1
+            for i in range(M):
+                e_stay = e_fn(i,o)
 
-    print(signal.shape)
+                if i == M-1:
+                    # If i is end state, we can only stay
+                    B[k,i] = e_stay + B[k+1,i] + self.t_fn(i,i)
+                else:
+                    e_move = e_fn(i+1,o)
+                    # Move and stay probability
+                    B[k,i] = logaddexp(B[k+1,i] + self.t_fn(i,i) + e_stay, B[k+1,i+1] + self.t_fn(i,i+1) + e_move)
+                    if i < M-2:
+                        # End probability only if i<M-2 because otherwise it was covered by move or stay
+                        e_end = e_fn(M-1,o)
+                        B[k,i] = logaddexp(B[k,i], B[k+1,M-1] + self.t_fn(i,M-1) + e_end)
 
-    def transition_probs(s):
-        # Transition prior probabilities 
-        t_stay = 0.9
-        t_move = 1-t_stay
-        t_stay = np.log(t_stay)
-        t_move = np.log(t_move)
-        return t_stay, t_move
+        o = observations[:,0]
+        evidence = B[0,0] + e_fn(0,o)
+        return B, evidence
 
+    def viterbi(self, observations, e_fn):
+        M = self.num_segments
+        N = observations.shape[1]
 
-    for it in range(100):
+        V = np.zeros((N,M), dtype=np.float)+self.eps
+        V[0,0] = 1
+        V = np.log(V)
+        P = np.zeros((N,M), dtype=np.int32)
 
-        def emission_probs(s, o):
-            ret = segment_p[s]*o + (np.log(1-np.exp(segment_p[s])))*(1-o)
-            return ret
+        start_prob = np.zeros(M)+self.eps
+        start_prob[0] = 1
+        start_prob = np.log(start_prob)
 
+        for k in range(0,N-1):
+            o = observations[:,k]
+            for i in range(M):
+                e = e_fn(i,o)
+                
+                if k == 0:
+                    V[k,i] = np.max(e + start_prob[i])
+                    continue
 
-        print('P: ',segment_p, np.exp(segment_p))
-        F,f_evidence = forward(signal, transition_probs, emission_probs, max_segments)
-        B,b_evidence = backward(signal, transition_probs, emission_probs, max_segments)
+                p = np.zeros(M)-np.inf
 
-        posterior = F + B - b_evidence
+                p[i] = V[k-1,i] + self.t_fn(i,i)
 
-        # Maximize
-        segment_sum = np.zeros(max_segments)
-        segment_scale_factor = np.zeros(max_segments)
-        lsignal = np.log(np.clip(signal,eps,1))
-        for k in range(signal.shape[0]):
-            for i in range(max_segments):
-                segment_sum[i] = logaddexp(segment_sum[i], lsignal[k] + posterior[k,i])
-                segment_scale_factor[i] = logaddexp(segment_scale_factor[i], posterior[k,i])
-        segment_p_new = segment_sum - segment_scale_factor
-        if np.max(np.abs(segment_p_new - segment_p)) < np.exp(-16):
-            break
-        segment_p = segment_p_new
+                if i > 0:
+                    p[i-1] = V[k-1,i-1] + self.t_fn(i-1,i)
 
-#    print(posterior.argmax(axis=1))
-    
-    print("Estimated: ",np.exp(segment_p))
-    print("True: ",(signal[:10].sum()/10, signal[10:20].sum()/10, signal[20:].sum()/30))
-    X,Z = viterbi(signal, transition_probs, emission_probs, max_segments)
-    print("Viterbi reflected: ",(signal[X==0].sum()/(X==0).sum(), signal[X==1].sum()/(X==1).sum(), signal[X==2].sum()/(X==2).sum()))
-    print(X)
+                if i==M-1:
+                    for j in range(M-2): # last two have been covered by stay and move
+                        p[j] = V[k-1,j] + self.t_fn(j,i)
 
-    print((X==0)[:10].sum(), (X==1)[10:20].sum(),(X==2)[20:].sum())
+                p = e + p
 
-if __name__ == '__main__':
-    main()
+                V[k,i] = np.max(p)
+                P[k,i] = np.argmax(p)
+
+        V[-1,:] = -512
+        V[-1,-1] = np.max(V[-2,:])
+        P[-1,-1] = np.argmax(V[-2,:])
+
+        X = np.zeros(N, dtype=np.int32)
+        Z = np.zeros(N, dtype=np.float32)
+        X[N-1] = M-1
+        Z[N-1] = 0
+
+        for k in range(N-2, -1, -1):
+            X[k] = P[k,X[k+1]]
+            Z[k] = V[k,X[k]]
+
+        return X,Z
+
+    def baum_welch(self, observations, e_fn_unsalted, tol=np.exp(-4)):
+        # Initial guess of parameters
+        N=observations.shape[1]
+        R=observations.shape[0]
+        M=self.num_segments
+        segment_p = np.zeros((R,M)) - np.log(2)
+
+        for it in range(100):
+            if not self.prior_a is None:
+                segment_prior = self.prior_lognormfactor + segment_p*(self.prior_a-1) + np.log(1-np.exp(segment_p)+self.eps)*(self.prior_a-1)
+                # For numerical stability:
+                segment_prior = np.clip(segment_prior, -10,0.5)
+            else: 
+                segment_prior = None
+
+            # Salted function of emission likelihood
+            e_fn = lambda i,o: e_fn_unsalted(i, o, segment_p, segment_prior)
+
+            F,f_evidence = self.forward(observations, e_fn)
+            B,b_evidence = self.backward(observations, e_fn)
+            print(f_evidence, b_evidence)
+
+            posterior = F + B - b_evidence
+
+            # Maximize
+            segment_sum = np.zeros(segment_p.shape)
+            segment_scale_factor = np.zeros(segment_p.shape)
+
+            for k in range(N):
+                for r in range(R):
+                    o = observations[r,k]
+                    if o == -1:
+                        continue
+                    lo = np.log(o+self.eps)
+                    certainty = np.log(0.5 + np.abs(o-0.5)+self.eps)
+                    for i in range(M):
+                        if posterior[k,i] > -128:
+                            if o > 0.5:
+                                segment_sum[r,i] = logaddexp(segment_sum[r,i],  posterior[k,i] + certainty)
+                            segment_scale_factor[r,i] = logaddexp(segment_scale_factor[r,i], posterior[k,i] + certainty)
+
+            segment_p_new = segment_sum - segment_scale_factor
+            diff =  np.max(np.abs(np.exp(segment_p_new) - np.exp(segment_p)))
+            print("Diff: ", diff)
+            if diff < tol:
+                break
+            segment_p = segment_p_new
+        return segment_p, segment_prior
 
