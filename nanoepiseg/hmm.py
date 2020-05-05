@@ -1,29 +1,17 @@
 import numpy as np
 import math
 import time
+import scipy.optimize
 
 def arraylogexpsum(x):
     ret = x[0]
     for i in range(1, len(x)):
         ret = logaddexp(ret,x[i])
-    return ret if ret > -256 else -512
+    return ret# if ret > -256 else -512
 
 def logaddexp(a,b):
     ret = np.logaddexp(a,b)
     return ret
-    if np.isscalar(a):
-        if a < -256:
-            ret = b
-        if b < -256:
-            ret = a
-        else:
-            ret = np.logaddexp(a,b)
-        return ret if ret > -256 else -512
-    else:
-        ret[a<-256] = b[a<-256]
-        ret[b<-256] = a[b<-256]
-        ret[ret<-256] = -512
-        return ret
 
 class SegmentationHMM:
     def __init__(self, max_segments, t_stay, t_move, seg_penalty=0, prior_a=None, eps=np.exp(-512)):
@@ -40,20 +28,24 @@ class SegmentationHMM:
         self.t_move = np.array([t_move -self. seg_penalty[i] for i in range(max_segments)], dtype=np.float64)
         self.t_stay = np.array([t_stay for  i in range(max_segments)], dtype=np.float64)
         self.t_end = np.array([1-self.t_move[i]-self.t_stay[i] for i in range(max_segments)], dtype=np.float64)
+        print(self.t_move)
+        print(self.t_stay)
+        print(self.t_end)
         self.t_move = np.log(self.t_move + eps)
         self.t_stay = np.log(self.t_stay + eps)
         self.t_end = np.log(self.t_end + eps)
 
+
     def t_fn(self, i, j):
         if i==j:
             return self.t_stay[i]
-
+        if i==(j-1):
+            # Probability to move to the next state 
+            return self.t_move[i]# + sim_penalty
         if j==(self.num_segments-1):
             # Probability to go the last segment
             return self.t_end[i]
-        if i==(j-1):
-            # Probability to move to the next state 
-            return self.t_move[i]
+
 
         raise RuntimeError('Transition %d to %d is not a valid transition in segmentation HMM '%(i,j))
 
@@ -156,16 +148,15 @@ class SegmentationHMM:
                 if i==M-1:
                     for j in range(M-2): # last two have been covered by stay and move
                         p[j] = V[k-1,j] + self.t_fn(j,i)
-
                 p = e + p
 
                 V[k,i] = np.max(p)
                 P[k,i] = np.argmax(p)
-
-        V[-1,:] = -512
+            # Rescaling prevents underflow
+            V[k,:] = V[k,:] - arraylogexpsum(V[k,:])
+        V[-1,:] = np.log(self.eps)
         V[-1,-1] = np.max(V[-2,:])
         P[-1,-1] = np.argmax(V[-2,:])
-
         X = np.zeros(N, dtype=np.int32)
         Z = np.zeros(N, dtype=np.float32)
         X[N-1] = M-1
@@ -177,12 +168,80 @@ class SegmentationHMM:
 
         return X,Z
 
-    def baum_welch(self, observations, e_fn_unsalted, tol=np.exp(-4)):
+
+    def MAP(self, posterior):
+        M = self.num_segments
+        N = posterior.shape[0]
+
+        V = np.zeros((N,M), dtype=np.float)+self.eps
+        V[0,0] = 1
+        V = np.log(V)
+        P = np.zeros((N,M), dtype=np.int32)
+
+        start_prob = np.zeros(M)+self.eps
+        start_prob[0] = 1
+        start_prob = np.log(start_prob)
+
+        for k in range(0,N-1):
+            for i in range(M):
+                e = posterior[k,i]
+                
+                if k == 0:
+                    V[k,i] = np.max(e + start_prob[i])
+                    continue
+
+                p = np.zeros(M)-np.inf
+
+                p[i] = V[k-1,i] + self.t_fn(i,i)
+
+                if i > 0:
+                    p[i-1] = V[k-1,i-1] + self.t_fn(i-1,i)
+
+                if i==M-1:
+                    for j in range(M-2): # last two have been covered by stay and move
+                        p[j] = V[k-1,j] + self.t_fn(j,i)
+                p = e + p
+
+                V[k,i] = np.max(p)
+                P[k,i] = np.argmax(p)
+            # Rescaling prevents underflow
+            V[k,:] = V[k,:] - arraylogexpsum(V[k,:])
+        V[-1,:] = np.log(self.eps)
+        V[-1,-1] = np.max(V[-2,:])
+        P[-1,-1] = np.argmax(V[-2,:])
+        X = np.zeros(N, dtype=np.int32)
+        Z = np.zeros(N, dtype=np.float32)
+        X[N-1] = M-1
+        Z[N-1] = 0
+
+        for k in range(N-2, -1, -1):
+            X[k] = P[k,X[k+1]]
+            Z[k] = V[k,X[k]]
+
+        return X,Z
+
+
+    def baum_welch(self, observations, e_fn_unsalted, tol=np.exp(-4), it_hook=None, initial_params=None, samples=None):
         # Initial guess of parameters
         N=observations.shape[1]
         R=observations.shape[0]
         M=self.num_segments
-        segment_p = np.zeros((R,M)) - np.log(2)
+
+        if samples is None:
+            # No samples, then we use the identity
+            self.obs_c = np.arange(R) 
+        else:
+            self.obs_c = samples
+
+        C=len(set(self.obs_c))
+
+        if initial_params is None:
+            segment_p = np.zeros((C,M))
+            segment_p[:,::2] = np.log(1/5)
+            segment_p[:,1::2] = np.log(4/5)
+        else:
+            segment_p = initial_params.copy()
+
 
         for it in range(100):
             if not self.prior_a is None:
@@ -193,7 +252,7 @@ class SegmentationHMM:
                 segment_prior = None
 
             # Salted function of emission likelihood
-            e_fn = lambda i,o: e_fn_unsalted(i, o, segment_p, segment_prior)
+            e_fn = lambda i,o: e_fn_unsalted(i, o, segment_p[self.obs_c], segment_prior)
 
             F,f_evidence = self.forward(observations, e_fn)
             B,b_evidence = self.backward(observations, e_fn)
@@ -202,27 +261,47 @@ class SegmentationHMM:
             posterior = F + B - b_evidence
 
             # Maximize
-            segment_sum = np.zeros(segment_p.shape)
-            segment_scale_factor = np.zeros(segment_p.shape)
+            segment_p_new = np.zeros(segment_p.shape)
 
-            for k in range(N):
-                for r in range(R):
-                    o = observations[r,k]
-                    if o == -1:
-                        continue
-                    lo = np.log(o+self.eps)
-                    certainty = np.log(0.5 + np.abs(o-0.5)+self.eps)
-                    for i in range(M):
-                        if posterior[k,i] > -128:
-                            if o > 0.5:
-                                segment_sum[r,i] = logaddexp(segment_sum[r,i],  posterior[k,i] + certainty)
-                            segment_scale_factor[r,i] = logaddexp(segment_scale_factor[r,i], posterior[k,i] + certainty)
 
-            segment_p_new = segment_sum - segment_scale_factor
+            for c in range(C):
+                def to_minimize(x):
+                    ret = 0
+
+                    ls = np.zeros(M)
+                    ps = np.zeros(M)
+                    for r in range(R):
+                        if not self.obs_c[r] == c:
+                            continue
+                        o = observations[r,:] 
+                        idx = o!=-1
+                        o = o[idx]
+                        pki = posterior[idx,:]
+
+                        l_a = np.outer((1-o), (1-x))/2
+                        l_b = np.outer(o,x)/2
+                        l = np.log(l_a+l_b+self.eps)
+                        ls += (l*np.exp(pki)).sum(axis=0)
+                        ps += np.exp(pki).sum(axis=0)
+
+                    ret = ls / ps
+                    ret = ret.sum()
+                    return -ret
+
+                estimated_p = scipy.optimize.minimize(to_minimize, np.exp(segment_p[c,:]), method='SLSQP', bounds=[(0.05,0.95)]*M).x
+                #print(estimated_p, " improves " , c, " from ", to_minimize(np.exp(segment_p[c,:])), " to ", to_minimize(estimated_p))
+
+                segment_p_new[c,:] = np.log(estimated_p)
+
             diff =  np.max(np.abs(np.exp(segment_p_new) - np.exp(segment_p)))
             print("Diff: ", diff)
             if diff < tol:
                 break
+
             segment_p = segment_p_new
-        return segment_p, segment_prior
+
+            if not it_hook is None:
+                it_hook(segment_p[self.obs_c,:], segment_prior, posterior)
+
+        return segment_p, segment_prior, posterior
 
