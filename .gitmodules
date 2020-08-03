@@ -1,0 +1,3 @@
+[submodule "nanoepitools"]
+	path = nanoepitools
+	url = https://github.com/snajder-r/nanoepitools

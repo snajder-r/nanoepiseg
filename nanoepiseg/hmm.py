@@ -252,7 +252,7 @@ class SegmentationHMM:
                 segment_prior = None
 
             # Salted function of emission likelihood
-            e_fn = lambda i,o: e_fn_unsalted(i, o, segment_p[self.obs_c], segment_prior)
+            e_fn = lambda i,o: e_fn_unsalted(i, o, segment_p[self.obs_c], segment_prior[self.obs_c] if not segment_prior is None else None)
 
             F,f_evidence = self.forward(observations, e_fn)
             B,b_evidence = self.backward(observations, e_fn)
@@ -301,7 +301,7 @@ class SegmentationHMM:
             segment_p = segment_p_new
 
             if not it_hook is None:
-                it_hook(segment_p[self.obs_c,:], segment_prior, posterior)
+                it_hook(segment_p, segment_prior, posterior)
 
         return segment_p, segment_prior, posterior
 
