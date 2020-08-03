@@ -7,7 +7,7 @@ setup(name='nanoepiseg',
       author='Rene Snajder',
       license='MIT',
       packages=['nanoepiseg'],
-      install_requires= [
+      install_requires=[
           'numpy',
           'scipy'
       ],
