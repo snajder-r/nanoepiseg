@@ -1,23 +1,13 @@
-import os
-
-import h5py
 import numpy as np
 
 import matplotlib.pyplot as plt
 import matplotlib.backends.backend_pdf
-import scnmttools.h5utils as h5util
-import re
-import pandas as pd
-import scipy.sparse  as sp
 
 from nanoepiseg.helper import medulloblastoma_project
 import nanoepiseg.hmm
 import nanoepiseg.helper
 import time
 
-from IPython.display import clear_output
-import ruptures as rpt
-from scipy import signal
 import sys
 
 metcall_dir = '/home/r933r/snajder/nanopore/data/medulloblastoma_dna/met_merged/'
@@ -25,15 +15,15 @@ chrom = sys.argv[1]
 qs = float(sys.argv[2])
 qe = float(sys.argv[3])
 sfx = sys.argv[4]
-#outfile_ml = '/home/r933r/snajder/nanopore/data/medulloblastoma_dna/met_seg/ml_%s_%s.txt'%(chrom,sfx)
-#outfile_map = '/home/r933r/snajder/nanopore/data/medulloblastoma_dna/met_seg/map_%s_%s.txt'%(chrom,sfx)
-#pdf_ml = '/home/r933r/snajder/nanopore/data/medulloblastoma_dna/met_seg/ml_%s_%s.pdf'%(chrom,sfx)
-#pdf_map = '/home/r933r/snajder/nanopore/data/medulloblastoma_dna/met_seg/map_%s_%s.pdf'%(chrom,sfx)
+# outfile_ml = '/home/r933r/snajder/nanopore/data/medulloblastoma_dna/met_seg/ml_%s_%s.txt'%(chrom,sfx)
+# outfile_map = '/home/r933r/snajder/nanopore/data/medulloblastoma_dna/met_seg/map_%s_%s.txt'%(chrom,sfx)
+# pdf_ml = '/home/r933r/snajder/nanopore/data/medulloblastoma_dna/met_seg/ml_%s_%s.pdf'%(chrom,sfx)
+# pdf_map = '/home/r933r/snajder/nanopore/data/medulloblastoma_dna/met_seg/map_%s_%s.pdf'%(chrom,sfx)
 
-outfile_ml = '/home/r933r/snajder/test/ml_%s_%s.txt'%(chrom,sfx)
-outfile_map = '/home/r933r/snajder/test/map_%s_%s.txt'%(chrom,sfx)
-pdf_ml = '/home/r933r/snajder/test/ml_%s_%s.pdf'%(chrom,sfx)
-pdf_map = '/home/r933r/snajder/test/map_%s_%s.pdf'%(chrom,sfx)
+outfile_ml = '/home/r933r/snajder/test/ml_%s_%s.txt' % (chrom,sfx)
+outfile_map = '/home/r933r/snajder/test/map_%s_%s.txt' % (chrom , sfx)
+pdf_ml = '/home/r933r/snajder/test/ml_%s_%s.pdf' % (chrom , sfx)
+pdf_map = '/home/r933r/snajder/test/map_%s_%s.pdf' % (chrom , sfx)
 
 
 mb = medulloblastoma_project()
