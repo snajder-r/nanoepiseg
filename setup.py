@@ -9,6 +9,9 @@ setup(name='nanoepiseg',
       packages=['nanoepiseg'],
       install_requires=[
           'numpy',
-          'scipy'
+          'scipy',
+          'pandas',
+          'nanoepitools',
+          'matplotlib'
       ],
       zip_safe=False)

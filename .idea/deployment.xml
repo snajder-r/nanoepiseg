@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="r933r@odcf-worker01:22" autoUploadExternalChanges="true">
+    <serverData>
+      <paths name="r933r@odcf-worker01:22">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/r933r/code/nanoepiseg" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>
