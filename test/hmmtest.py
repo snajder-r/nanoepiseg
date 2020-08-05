@@ -51,16 +51,8 @@ class HMMTestCase(unittest.TestCase):
                                               samples=np.arange(0, n_reads))
 
         segmentation, _ = hmm.MAP(posterior)
-        print(segmentation)
 
-        obs[obs != -1] = nmath.p_to_llr(obs[obs != -1])
-        obs[obs == -1] = 0
-        nplt.plot_met_profile(obs, samples=np.repeat('1', n_reads),
-                              sample_order=['1'], sample_colors={'1': 'r'},
-                              segment=segmentation)
-        plt.savefig('/home/r933r/test.png')
-
-        self.assertIsNotNone(posterior)
+        self.assertIsNotNone(segmentation)
 
 
 if __name__ == '__main__':

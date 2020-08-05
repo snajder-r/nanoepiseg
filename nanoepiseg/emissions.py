@@ -134,7 +134,7 @@ class BernoulliPosterior(EmissionLikelihoodFunction):
                 ls += (l * np.exp(pki)).sum(axis=0)
                 ps += np.exp(pki).sum(axis=0)
 
-            ret = ls / ps
+            ret = ls / (ps + self.eps)
             ret = ret.sum()
             return -ret
         return curried_objective
