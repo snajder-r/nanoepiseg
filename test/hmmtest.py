@@ -12,24 +12,26 @@ import nanoepitools.math as nmath
 class HMMTestCase(unittest.TestCase):
 
     def test_instanciate(self):
-        emission_lik = BernoulliPosterior()
+        emission_lik = BernoulliPosterior(5,6)
         hmm = SegmentationHMM(max_segments=10, t_stay=0.5, t_move=0.5,
                               e_fn=emission_lik)
         self.assertIsNotNone(hmm)
 
     def test_instanciate_optional_parameters(self):
-        emission_lik = BernoulliPosterior()
+        emission_lik = BernoulliPosterior(5,6)
         hmm = SegmentationHMM(max_segments=10, t_stay=0.5, t_move=0.2,
                               seg_penalty=0.1, eps=0.0001, e_fn=emission_lik)
         self.assertIsNotNone(hmm)
 
     def test_segment_simple_example(self):
         random.seed(42)
-        emission_lik = BernoulliPosterior(prior_a=0.9)
-        hmm = SegmentationHMM(max_segments=30, t_stay=0.1, t_move=0.85,
-                              e_fn=emission_lik, eps=np.exp(-512))
         n_obs = 100
         n_reads = 40
+        n_segments = 15
+        emission_lik = BernoulliPosterior(40, n_segments, prior_a=0.9)
+        hmm = SegmentationHMM(max_segments=n_segments, t_stay=0.1, t_move=0.8,
+                              e_fn=emission_lik, eps=np.exp(-512))
+
         # Simple up-down signal
         obs = np.repeat([[((i // 10) % 2) == 0 for i in range(n_obs)]],
                         n_reads, axis=0).astype(float)
@@ -39,9 +41,14 @@ class HMMTestCase(unittest.TestCase):
         for i in range(n_reads):
             start = random.randrange(0, n_obs-10)
             end = random.randrange(start+10, n_obs)
-            obs[i, start:end] = -1
+            if i % 2 == 0:
+                obs[i, :] = 1 - obs[i, :]
+            obs[i, :start] = -1
+            obs[i, end:] = -1
 
-        segment_p, posterior = hmm.baum_welch(obs, tol=np.exp(-8))
+        obs = obs[:, (obs != -1).sum(axis=0) > 0]
+        segment_p, posterior = hmm.baum_welch(obs, tol=np.exp(-8),
+                                              samples=np.arange(0, n_reads))
 
         segmentation, _ = hmm.MAP(posterior)
         print(segmentation)

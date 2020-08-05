@@ -58,7 +58,7 @@ class SegmentationHMM:
             'Transition %d to %d is not a valid transition in segmentation HMM ' % (
             i, j))
 
-    def forward(self, observations, e_fn):
+    def forward(self, observations, e_fn, obs_c):
         M = self.num_segments
         R = observations.shape[0]
         N = observations.shape[1]
@@ -72,7 +72,7 @@ class SegmentationHMM:
         for k in range(N):
             o = observations[:, k]
             for i in range(M):
-                e = e_fn(i, o)
+                e = e_fn(i, o, obs_c)
 
                 if k == 0:
                     F[k, i] = e + start_prob[i]
@@ -98,7 +98,7 @@ class SegmentationHMM:
         evidence = F[-1, -1]
         return F, evidence
 
-    def backward(self, observations, e_fn):
+    def backward(self, observations, e_fn, obs_c):
         R = observations.shape[0]
         M = self.num_segments
         N = observations.shape[1]
@@ -110,13 +110,13 @@ class SegmentationHMM:
             o = observations[:, k]
             k = k - 1
             for i in range(M):
-                e_stay = e_fn(i, o)
+                e_stay = e_fn(i, o, obs_c)
 
                 if i == M - 1:
                     # If i is end state, we can only stay
                     B[k, i] = e_stay + B[k + 1, i] + self.t_fn(i, i)
                 else:
-                    e_move = e_fn(i + 1, o)
+                    e_move = e_fn(i + 1, o, obs_c)
                     # Move and stay probability
                     B[k, i]= logaddexp(B[k + 1, i] + self.t_fn(i, i) + e_stay,
                                        B[k + 1, i + 1] + self.t_fn(i, i + 1)
@@ -124,15 +124,15 @@ class SegmentationHMM:
                     if i < M - 2:
                         # End probability only if i<M-2 because otherwise it
                         # was covered by move or stay
-                        e_end = e_fn(M - 1, o)
+                        e_end = e_fn(M - 1, o, obs_c)
                         B[k, i] = logaddexp(B[k, i], B[k + 1, M - 1] +
                                             self.t_fn(i, M - 1) + e_end)
 
         o = observations[:, 0]
-        evidence = B[0, 0] + e_fn(0, o)
+        evidence = B[0, 0] + e_fn(0, o, obs_c)
         return B, evidence
 
-    def viterbi(self, observations, e_fn):
+    def viterbi(self, observations, e_fn, obs_c):
         M = self.num_segments
         N = observations.shape[1]
 
@@ -148,7 +148,7 @@ class SegmentationHMM:
         for k in range(0, N - 1):
             o = observations[:, k]
             for i in range(M):
-                e = e_fn(i, o)
+                e = e_fn(i, o, obs_c)
 
                 if k == 0:
                     V[k, i] = np.max(e + start_prob[i])
@@ -238,11 +238,9 @@ class SegmentationHMM:
         return X, Z
 
     def baum_welch(self, observations, tol=np.exp(-4),
-                   it_hook=None, initial_params=None, samples=None):
+                   it_hook=None, samples=None):
         # Initial guess of parameters
-        N = observations.shape[1]
         R = observations.shape[0]
-        M = self.num_segments
 
         if any((observations != -1).sum(axis=0) == 0):
             raise ValueError('Observations must not include reads with no '
@@ -259,35 +257,31 @@ class SegmentationHMM:
 
         C = len(set(self.obs_c))
 
-        if initial_params is None:
-            segment_p = np.zeros((C, M))
-            segment_p[:, ::2] = np.log(1 / 5)
-            segment_p[:, 1::2] = np.log(4 / 5)
-        else:
-            segment_p = initial_params.copy()
-
         for it in range(100):
-            self.e_fn.update_params(segment_p[self.obs_c])
-
-            F, f_evidence = self.forward(observations, self.e_fn.likelihood)
-            B, b_evidence = self.backward(observations, self.e_fn.likelihood)
+            F, f_evidence = self.forward(observations, self.e_fn.likelihood,
+                                         self.obs_c)
+            B, b_evidence = self.backward(observations, self.e_fn.likelihood,
+                                          self.obs_c)
             # Sanity check: fwd and bwd algorithm should return same evidence
             assert(np.abs(f_evidence - b_evidence) < 10e-6)
 
             posterior = F + B - b_evidence
 
             # Maximize
-            segment_p_new = np.zeros(segment_p.shape)
+            segment_p_new = []
 
             for c in range(C):
+                old_params = self.e_fn.get_cluster_params(c)
                 to_minimize = self.e_fn.minimization_objective(
                     observations[self.obs_c == c], posterior)
-                estimated_p = scipy.optimize.minimize(to_minimize, np.exp(
-                    segment_p[c, :]), method='SLSQP', bounds=[(0.05, 0.95)] *
-                                                             M).x
-                segment_p_new[c, :] = np.log(estimated_p)
+                bounds = self.e_fn.get_param_bounds()
+                estimated_p = scipy.optimize.minimize(to_minimize, old_params,
+                                                      method='SLSQP',
+                                                      bounds=bounds).x
+                segment_p_new.append(estimated_p)
 
-            diff = np.max(np.abs(np.exp(segment_p_new) - np.exp(segment_p)))
+            diff = self.e_fn.update_params(segment_p_new)
+
             print("Diff: ", diff)
             if diff < tol:
                 break
