@@ -1,13 +1,14 @@
-import numpy as np
-from abc import ABC, abstractmethod
 import math
-from typing import List
+from abc import ABC, abstractmethod
+from typing import Dict
+
+import numpy as np
 
 
 class EmissionLikelihoodFunction(ABC):
 
     @abstractmethod
-    def update_params(self, params: List):
+    def update_params(self, params: Dict):
         pass
 
     @abstractmethod
@@ -38,15 +39,16 @@ class BernoulliPosterior(EmissionLikelihoodFunction):
     L = (1-p(a|S)) * (1-mu) / (1-p(a)) + p(a|S) * mu / p(a)
     """
 
-    segment_p: np.array = None
-    segment_prior: np.array = None
-    prior_lognormfactor: float
-
     def __init__(self, number_of_clusters, number_of_segments,
                  prior_a: float = None, eps=np.exp(-512),
                  initial_segment_p: np.array = None):
+        # Just for type hinting and to get rid of warnings
+        self.segment_p: np.array = None
+        self.segment_prior: np.array = None
+        self.prior_lognormfactor: float = 0
+
         self.eps: float = eps
-        self.prior_a = prior_a
+        self.prior_a: float = prior_a
 
         if initial_segment_p is None:
             self.segment_p = np.zeros((number_of_clusters, number_of_segments))
@@ -62,8 +64,8 @@ class BernoulliPosterior(EmissionLikelihoodFunction):
         if self.prior_a is not None:
             # Precompute the normfactor (in log space) of the prior gamma
             # distribution
-            self.prior_lognormfactor = np.log(math.gamma(2 * prior_a) / (
-                    math.gamma(prior_a) ** 2))
+            self.prior_lognormfactor = np.log(
+                math.gamma(2 * prior_a) / (math.gamma(prior_a) ** 2))
 
     def update_prior(self):
         """
@@ -71,53 +73,61 @@ class BernoulliPosterior(EmissionLikelihoodFunction):
         self.segment_p and self.prior_a
         """
         self.segment_prior = self.segment_p * (self.prior_a - 1)
-        self.segment_prior += np.log(1 - np.exp(self.segment_p) + self.eps) *\
-                              (self.prior_a - 1)
+        self.segment_prior += np.log(1 - np.exp(self.segment_p) + self.eps) * (
+                self.prior_a - 1)
         self.segment_prior += self.prior_lognormfactor
 
-    def update_params(self, segment_p_list: np.array):
+    def update_params(self, segment_p_list: Dict[int, np.ndarray]):
         """
         Updates bernoulli parameters
         :param segment_p_list: bernoulli parameters. A list with one numpy array
         per cluster
         :return: difference between old and new parameters to assess convergence
         """
-        new_segment_p = np.stack(segment_p_list, axis=0)
-        diff = np.max(np.abs(np.exp(self.segment_p) - new_segment_p))
-        self.segment_p = np.log(new_segment_p)
+        maxdiff = 0
+        for sample in segment_p_list.keys():
+            diff = np.max(np.abs(np.exp(self.segment_p[sample, :]) - np.exp(
+                segment_p_list[sample])))
+            maxdiff = max(diff, maxdiff)
+            self.segment_p[sample, :] = segment_p_list[sample]
+
         if self.prior_a is not None:
             self.update_prior()
-        return diff
+        return maxdiff
 
     def likelihood(self, segment_index: int, observations: np.array,
                    observations_cluster_assignment: np.array):
         p = self.segment_p[observations_cluster_assignment, :]
         idx = (observations != -1)
 
-        ret_a = (np.log(1 - np.exp(p[idx, segment_index]) + self.eps))
-        ret_a += np.log(1 - observations[idx]) + np.log(0.5)
+
+        ret_a = (np.log(-np.expm1(p[idx, segment_index]) + self.eps))
+        ret_a += np.log1p(-observations[idx]) + np.log(0.5)
 
         ret_b = p[idx, segment_index]
-        ret_b += np.log(observations[idx]) + np.log(0.5)
+        ret_b += np.log(observations[idx] + self.eps) + np.log(0.5)
 
         ret = np.logaddexp(ret_a, ret_b)
         if self.segment_prior is not None:
-            ret += self.segment_prior[observations_cluster_assignment,:][
+            ret += self.segment_prior[observations_cluster_assignment, :][
                 idx, segment_index]
         return ret.sum()
 
     def minimization_objective(self, observations: np.array,
-                               posterior: np.array):
+                               posterior_exp: np.array):
         """
         Returns a curried function that only takes the candidate parameters
         mu' and returns a minimization object (in this case the total
         likelihood p(S|mu',psi) given S and posteriors p(psi|mu))
         :param observations: observations numpy array
-        :param posterior: posterior of segmentation as estimated by the hmm
+        :param posterior_exp: posterior of segmentation as estimated by the hmm
+        - must be in linear space (not log space)
         :return: a function that takes parameters mu and returns likelihood
         """
+
         def curried_objective(x):
-            # x is in log-space but these computations are easier in lin-space
+            # x is in log-space but these computations are easier in
+            # lin-space
             # since there are a lot of additions going on
             # x = np.exp(x)
             ls = np.zeros(self.segment_p.shape[1])
@@ -126,17 +136,18 @@ class BernoulliPosterior(EmissionLikelihoodFunction):
                 o = observations[r, :]
                 idx = o != -1
                 o = o[idx]
-                pki = posterior[idx, :]
+                pki = posterior_exp[idx, :]
 
                 l_a = np.outer((1 - o), (1 - x)) / 2
                 l_b = np.outer(o, x) / 2
                 l = np.log(l_a + l_b + self.eps)
-                ls += (l * np.exp(pki)).sum(axis=0)
-                ps += np.exp(pki).sum(axis=0)
+                ls += (l * pki).sum(axis=0)
+                ps += pki.sum(axis=0)
 
             ret = ls / (ps + self.eps)
             ret = ret.sum()
             return -ret
+
         return curried_objective
 
     def get_cluster_params(self, cluster):
@@ -146,6 +157,9 @@ class BernoulliPosterior(EmissionLikelihoodFunction):
         :return: parameters in linear space
         """
         return np.exp(self.segment_p[cluster, :])
+
+    def get_params(self):
+        return np.exp(self.segment_p)
 
     def get_param_bounds(self):
         """
