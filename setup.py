@@ -9,7 +9,9 @@ setup(name='nanoepiseg',
       packages=['nanoepiseg'],
       install_requires=[
           'numpy',
-          'scipy',
+          # Due to scipy bug #11403 it doesn't work with scipy 1.5.
+          # This constrained can be lifted if the bug is fixed
+          'scipy==1.4.1',
           'pandas',
           'nanoepitools',
           'matplotlib'
