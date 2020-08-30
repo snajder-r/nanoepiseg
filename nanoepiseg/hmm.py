@@ -1,7 +1,8 @@
-import math
+from typing import Tuple
 
 import numpy as np
 import scipy.optimize
+
 from nanoepiseg.emissions import EmissionLikelihoodFunction
 
 
@@ -55,10 +56,11 @@ class SegmentationHMM:
             return self.t_end[i]
 
         raise RuntimeError(
-            'Transition %d to %d is not a valid transition in segmentation HMM ' % (
-            i, j))
+            'Transition %d to %d is not a valid transition in segmentation '
+            'HMM ' % (i, j))
 
-    def forward(self, observations, e_fn, obs_c):
+    def forward(self, observations, obs_c):
+        e_fn = self.e_fn.likelihood
         M = self.num_segments
         R = observations.shape[0]
         N = observations.shape[1]
@@ -83,8 +85,9 @@ class SegmentationHMM:
 
                 # Move probabilty
                 if i > 0:
-                    F[k, i] = logaddexp(F[k, i], e + F[k - 1, i - 1] +
-                                        self.t_fn(i - 1, i))
+                    F[k, i] = logaddexp(F[k, i],
+                                        e + F[k - 1, i - 1] + self.t_fn(i - 1,
+                                                                        i))
 
                 # End probability
                 if i == M - 1:
@@ -92,13 +95,14 @@ class SegmentationHMM:
                     # end state:
                     for j in range(
                             M - 2):  # exclude last 2 because those were already
-                                     # handled above
+                        # handled above
                         F[k, i] = logaddexp(F[k, i],
                                             e + F[k - 1, j] + self.t_fn(j, i))
         evidence = F[-1, -1]
         return F, evidence
 
-    def backward(self, observations, e_fn, obs_c):
+    def backward(self, observations, obs_c):
+        e_fn = self.e_fn.likelihood
         R = observations.shape[0]
         M = self.num_segments
         N = observations.shape[1]
@@ -118,21 +122,26 @@ class SegmentationHMM:
                 else:
                     e_move = e_fn(i + 1, o, obs_c)
                     # Move and stay probability
-                    B[k, i]= logaddexp(B[k + 1, i] + self.t_fn(i, i) + e_stay,
-                                       B[k + 1, i + 1] + self.t_fn(i, i + 1)
-                                       + e_move)
+                    B[k, i] = logaddexp(B[k + 1, i] + self.t_fn(i, i) + e_stay,
+                                        B[k + 1, i + 1] + self.t_fn(i,
+                                                                    i + 1) +
+                                        e_move)
                     if i < M - 2:
                         # End probability only if i<M-2 because otherwise it
                         # was covered by move or stay
                         e_end = e_fn(M - 1, o, obs_c)
-                        B[k, i] = logaddexp(B[k, i], B[k + 1, M - 1] +
-                                            self.t_fn(i, M - 1) + e_end)
+                        B[k, i] = logaddexp(B[k, i],
+                                            B[k + 1, M - 1] + self.t_fn(i,
+                                                                        M -
+                                                                        1) +
+                                            e_end)
 
         o = observations[:, 0]
         evidence = B[0, 0] + e_fn(0, o, obs_c)
         return B, evidence
 
-    def viterbi(self, observations, e_fn, obs_c):
+    def viterbi(self, observations, obs_c):
+        e_fn = self.e_fn.likelihood
         M = self.num_segments
         N = observations.shape[1]
 
@@ -215,7 +224,8 @@ class SegmentationHMM:
 
                 if i == M - 1:
                     for j in range(
-                            M - 2):  # last two have been covered by stay and move
+                            M - 2):  # last two have been covered by stay and
+                        # move
                         p[j] = V[k - 1, j] + self.t_fn(j, i)
                 p = e + p
 
@@ -237,8 +247,39 @@ class SegmentationHMM:
 
         return X, Z
 
-    def baum_welch(self, observations, tol=np.exp(-4),
-                   it_hook=None, samples=None):
+    def baum_welch(self, observations: np.ndarray, tol: float = np.exp(-4),
+                   it_hook=None, samples: np.ndarray = None,
+                   verbose: bool = False) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Run the baum_welch algorithm, an expectation maximization algorithm,
+        to find a segmentation of the methylation signal.
+
+        Note that this algorithm is rather memory expensive. It will take
+        O(CM) memory where C is the number of samples and M the maximum number
+        of segments. If no samples are provided, C is equal to the number of
+        reads, meaning the memory requirement grows with the read coverage.
+
+        :param observations: a numpy array of shape RxN, where R is the
+        number of reads and N is the number of gennomic positions (or CpG
+        sites). The values need to be in the range (0,1) and are methylation
+        predictions for the individual CpG sites. In order to speed up
+        computation, missing predictions can be labeled with the value -1.
+        This should lead to the same result as setting it to the value 0.5,
+        but reduces the number of computations required significantly.
+        :param tol: The absolute maximum difference in a parameter value that
+        determines convergence. If the difference is below tol, the algorithm
+        aborts
+        :param it_hook: A function hook that will be called after each
+        iteration. Takes the same parameters as the return value of this
+        function
+        :param samples: A 1-dimensional numpy array of length R, assigns each
+        read to a sample id. Sample ids must be integer, and must start from
+        0 and have no gaps.
+        :return: tuple with estimated parameters and posteriors. Estimated
+        paramater type depends on the given emission probability class.
+        Posterior is of shape NxM and gives the posterior probability of each
+        genomic site n being in each segment m
+        """
         # Initial guess of parameters
         R = observations.shape[0]
 
@@ -258,37 +299,38 @@ class SegmentationHMM:
         C = len(set(self.obs_c))
 
         for it in range(100):
-            F, f_evidence = self.forward(observations, self.e_fn.likelihood,
-                                         self.obs_c)
-            B, b_evidence = self.backward(observations, self.e_fn.likelihood,
-                                          self.obs_c)
+            F, f_evidence = self.forward(observations, self.obs_c)
+            B, b_evidence = self.backward(observations, self.obs_c)
             # Sanity check: fwd and bwd algorithm should return same evidence
-            assert(np.abs(f_evidence - b_evidence) < 10e-6)
+            if np.abs(f_evidence - b_evidence) > 10e-6:
+                print("WARNING: forward evidence %f does not equal backward "
+                      "evidence %f." % (f_evidence, b_evidence))
 
             posterior = F + B - b_evidence
 
             # Maximize
-            segment_p_new = []
+            segment_p_new = {}
 
             for c in range(C):
                 old_params = self.e_fn.get_cluster_params(c)
                 to_minimize = self.e_fn.minimization_objective(
-                    observations[self.obs_c == c], posterior)
+                    observations[self.obs_c == c], np.exp(posterior))
                 bounds = self.e_fn.get_param_bounds()
                 estimated_p = scipy.optimize.minimize(to_minimize, old_params,
                                                       method='SLSQP',
                                                       bounds=bounds).x
-                segment_p_new.append(estimated_p)
+                segment_p_new[c] = np.log(estimated_p)
 
             diff = self.e_fn.update_params(segment_p_new)
-
-            print("Diff: ", diff)
-            if diff < tol:
-                break
 
             segment_p = segment_p_new
 
             if it_hook is not None:
                 it_hook(segment_p, posterior)
+
+            if verbose:
+                print("Iteration %d, parameter difference: %f" % (it, diff))
+            if diff < tol:
+                break
 
         return segment_p, posterior
