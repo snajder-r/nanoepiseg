@@ -316,9 +316,11 @@ class SegmentationHMM:
                 to_minimize = self.e_fn.minimization_objective(
                     observations[self.obs_c == c], np.exp(posterior))
                 bounds = self.e_fn.get_param_bounds()
+
                 estimated_p = scipy.optimize.minimize(to_minimize, old_params,
-                                                      method='SLSQP',
-                                                      bounds=bounds).x
+                                                          method='SLSQP',
+                                                          bounds=bounds).x
+
                 segment_p_new[c] = np.log(estimated_p)
 
             diff = self.e_fn.update_params(segment_p_new)

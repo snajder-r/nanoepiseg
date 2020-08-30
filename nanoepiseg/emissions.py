@@ -156,10 +156,12 @@ class BernoulliPosterior(EmissionLikelihoodFunction):
         :param cluster: cluster index
         :return: parameters in linear space
         """
-        return np.exp(self.segment_p[cluster, :])
+        # Clipping is needed due to a scipy bug
+        return np.clip(np.exp(self.segment_p[cluster, :]), 0.02, 0.98)
 
     def get_params(self):
-        return np.exp(self.segment_p)
+        # Clipping is needed due to a scipy bug
+        return np.clip(np.exp(self.segment_p), 0.02, 0.98)
 
     def get_param_bounds(self):
         """
