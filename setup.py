@@ -7,6 +7,7 @@ setup(name='nanoepiseg',
       author='Rene Snajder',
       license='MIT',
       packages=['nanoepiseg'],
+      entry_points={"console_scripts": ["nanoepiseg = nanoepiseg.__main__:main"]},
       install_requires=[
           'numpy',
           # Due to scipy bug #11403 it doesn't work with scipy 1.5.

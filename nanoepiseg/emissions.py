@@ -6,9 +6,21 @@ import numpy as np
 
 
 class EmissionLikelihoodFunction(ABC):
-
+    """
+    Abstract class defining the interface for emission likelihood functions
+    The types for parameters is not defined here (only that it's stored as Dict) so that
+    the concrete implementation of the likelihood function may define it's own
+    domain of parameters, as long as the update_params function takes the same structure
+    of parameters as the get_params and get_cluster_params method return
+    """
     @abstractmethod
     def update_params(self, params: Dict):
+        """
+        :param params: Dictionary where the key is the cluster id and the value contains
+        the parameter(s)
+        :type params: Dict
+        :return:
+        """
         pass
 
     @abstractmethod
@@ -117,7 +129,7 @@ class BernoulliPosterior(EmissionLikelihoodFunction):
                                posterior_exp: np.array):
         """
         Returns a curried function that only takes the candidate parameters
-        mu' and returns a minimization object (in this case the total
+        mu and returns a minimization object (in this case the total
         likelihood p(S|mu',psi) given S and posteriors p(psi|mu))
         :param observations: observations numpy array
         :param posterior_exp: posterior of segmentation as estimated by the hmm
