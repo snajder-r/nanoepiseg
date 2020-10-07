@@ -2,22 +2,11 @@ import argparse
 
 import nanoepiseg.main_chunked
 import nanoepiseg.main_multi
-import nanoepiseg.main_report
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="HMM based de-novo segmentation of methylation from Nanopolish methylation calls)"
-    )
-
-    parser.add_argument(
-        "--chunk_size",
-        metavar="chunk_size",
-        type=int,
-        required=True,
-        help="Number of llrs per chunk - for best "
-        "performance, should be a multiple of the "
-        "chunk_size used in creating of the h5 files",
     )
 
     subparsers = parser.add_subparsers(description="Subcommand: ", dest="subcommand")
@@ -41,6 +30,16 @@ def main():
     )
 
     chunked_args.add_argument(
+        "--chunksize",
+        metavar="chunksize",
+        type=int,
+        required=True,
+        help="Number of llrs per chunk - for best "
+        "performance, should be a multiple of the "
+        "chunksize used in creating of the h5 files",
+    )
+
+    chunked_args.add_argument(
         "--workers",
         metavar="workers",
         type=int,
@@ -54,12 +53,37 @@ def main():
         type=str,
         help="H5 file containing Nanopolish methylation calls",
     )
+    chunked_args.add_argument(
+        "--readgroups",
+        metavar="readgroups",
+        required=True,
+        type=str,
+        help="File containing read to readgroup assignment",
+    )
+
+    chunked_args.add_argument(
+        "--include_nogroup",
+        action="store_true",
+        default=False,
+        dest="include_nogroup",
+        help="Include reads with group -1 in all windows",
+    )
 
     multi_h5_args = subparsers.add_parser(
         "multi_h5",
         description="Segment multiple H5 files, where each h5 file represents one sample",
     )
     multi_h5_args.set_defaults(func=nanoepiseg.main_multi.multifile_segmentation)
+
+    multi_h5_args.add_argument(
+        "--chunksize",
+        metavar="chunksize",
+        type=int,
+        required=True,
+        help="Number of llrs per chunk - for best "
+        "performance, should be a multiple of the "
+        "chunksize used in creating of the h5 files",
+    )
 
     multi_h5_args.add_argument(
         "--genomic_range",
@@ -89,6 +113,45 @@ def main():
         nargs="*",
         type=str,
         help="Sample names (one per h5 file). If not provided, will be inferred from the filenames",
+    )
+
+    extract_haplotype_ids_args = subparsers.add_parser(
+        "extract_haplotype_ids",
+        description="Extract phase set and haplotype id from bam file",
+    )
+    extract_haplotype_ids_args.set_defaults(
+        func=nanoepiseg.main_extract_haplotype_ids.extract_haplotype_ids
+    )
+
+    extract_haplotype_ids_args.add_argument(
+        "--bam",
+        metavar="bam",
+        type=str,
+        required=True,
+        help="BAM File containing read group annotation",
+    )
+
+    extract_haplotype_ids_args.add_argument(
+        "--output",
+        metavar="output",
+        type=str,
+        required=True,
+        help="Output tsv file",
+    )
+    extract_haplotype_ids_args.add_argument(
+        "--include_unphased",
+        action="store_true",
+        default=False,
+        dest="include_unphased",
+        help="Also include reads that have no HP tag (will be stored as -1/-1 ps/hp)",
+    )
+    extract_haplotype_ids_args.add_argument(
+        "--chroms",
+        metavar="chromosomes",
+        type=str,
+        required=False,
+        nargs="*",
+        help="Chromosomes to consider (default is all)",
     )
 
     report_args = subparsers.add_parser("report",
