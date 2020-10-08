@@ -2,11 +2,23 @@ import argparse
 
 import nanoepiseg.main_chunked
 import nanoepiseg.main_multi
+import nanoepiseg.main_extract_haplotype_ids
+import nanoepiseg.main_report
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="HMM based de-novo segmentation of methylation from Nanopolish methylation calls)"
+    )
+
+    parser.add_argument(
+        "--chunk_size",
+        metavar="chunk_size",
+        type=int,
+        required=True,
+        help="Number of llrs per chunk - for best "
+        "performance, should be a multiple of the "
+        "chunksize used in creating of the h5 files",
     )
 
     subparsers = parser.add_subparsers(description="Subcommand: ", dest="subcommand")
@@ -27,16 +39,6 @@ def main():
         help="Chunk ids within chromosome in hdf5 file. If more than one hdf5 is "
         "provided, the chunk id is picked from the file with the most chunks, and "
         "the other hdf5 files are mapped based on the genomic coordinates",
-    )
-
-    chunked_args.add_argument(
-        "--chunksize",
-        metavar="chunksize",
-        type=int,
-        required=True,
-        help="Number of llrs per chunk - for best "
-        "performance, should be a multiple of the "
-        "chunksize used in creating of the h5 files",
     )
 
     chunked_args.add_argument(
@@ -74,16 +76,6 @@ def main():
         description="Segment multiple H5 files, where each h5 file represents one sample",
     )
     multi_h5_args.set_defaults(func=nanoepiseg.main_multi.multifile_segmentation)
-
-    multi_h5_args.add_argument(
-        "--chunksize",
-        metavar="chunksize",
-        type=int,
-        required=True,
-        help="Number of llrs per chunk - for best "
-        "performance, should be a multiple of the "
-        "chunksize used in creating of the h5 files",
-    )
 
     multi_h5_args.add_argument(
         "--genomic_range",
@@ -160,9 +152,11 @@ def main():
 
     report_args.add_argument("--regions_tsv_fn", metavar="regions_tsv_fn", type=str,
         required=True, help="TSV output of pycometh report", )
-    report_args.add_argument("--h5_fn", metavar="h5_fn", type=str,
+    report_args.add_argument("--gene_expression_file", metavar="regions_tsv_fn", type=str,
+        required=True, help="TSV output of pycometh report", )
+    report_args.add_argument("--h5_fns", metavar="h5_fns", type=str, nargs="+",
         required=True,
-        help="H5 file containing Nanopolish methylation calls", )
+        help="H5 files containing Nanopolish methylation calls, one per sample", )
     report_args.add_argument("--output_pdf_fn", metavar="output_pdf_fn", type=str,
         required=True,
         help="PDF output file", )

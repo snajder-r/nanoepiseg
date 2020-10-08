@@ -17,5 +17,4 @@ setup(name='nanoepiseg',
           'nanoepitools',
           'matplotlib'
       ],
-      entry_points={'console_scripts': ['nanoepiseg=nanoepiseg.__main__:main']},
       zip_safe=False)
