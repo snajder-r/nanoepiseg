@@ -5,7 +5,8 @@
       <sourceFolder url="file://$MODULE_DIR$/nanoepitools" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$" isTestSource="false" />
     </content>
-    <orderEntry type="jdk" jdkName="Remote Python 3.7.7 (sftp://snajder@ebi:22/homes/snajder/miniconda3/envs/py37/bin/python)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="EBI py37 python 3.7 (sftp://snajder@localhost:2222/homes/snajder/miniconda3/envs/py37/bin/python)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="module" module-name="nanoepitools" />
   </component>
 </module>

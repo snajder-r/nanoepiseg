@@ -8,7 +8,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
-from nanoepitools.nanopolish_container import MetcallH5Container
+from meth5.meth5_wrapper import MetH5File
 from nanoepitools.plotting.plot_methylation_profile import plot_met_profile
 
 
@@ -24,7 +24,7 @@ def report(h5_fns: List[IO], chunk_size: int, regions_tsv_fn: IO, output_pdf_fn:
 
     sample_names = [Path(h5_fn).stem for h5_fn in h5_fns]
     sample_h5_fp = [
-        MetcallH5Container(h5_fn, chunk_size=chunk_size) for h5_fn in h5_fns
+        MetH5File(h5_fn, chunk_size=chunk_size) for h5_fn in h5_fns
     ]
     
     try:

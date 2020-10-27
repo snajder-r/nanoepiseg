@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import IO, List, Tuple, Dict
 
 from multiprocessing import Pool
-from nanoepitools.nanopolish_container import (
-    MetcallH5Container,
+from meth5.meth5_wrapper import (
+    MetH5File,
     MethlyationValuesContainer,
     ChromosomeContainer,
     create_sparse_matrix_from_samples,
@@ -177,8 +177,8 @@ def segment(
     chunk_size: int,
 ):
     # Open HDF5 files
-    sample_h5f: Dict[str, MetcallH5Container] = {
-        s: MetcallH5Container(p, "r", chunk_size=chunk_size)
+    sample_h5f: Dict[str, MetH5File] = {
+        s: MetH5File(p, "r", chunk_size=chunk_size)
         for s, p in sample_h5path.items()
     }
     # Create dictionary of MethlyationValuesContainer objects for each sample

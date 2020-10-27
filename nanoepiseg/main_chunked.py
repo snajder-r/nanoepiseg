@@ -3,8 +3,7 @@ from typing import IO, Iterable
 
 from multiprocessing import Pool
 import pandas as pd
-
-from nanoepitools.nanopolish_container import MetcallH5Container
+from meth5.meth5_wrapper import MetH5File
 
 
 def read_readgroups(readgroups_file: IO):
