@@ -189,8 +189,8 @@ class SegmentationHMM:
         Z[N - 1] = 0
 
         for k in range(N - 2, -1, -1):
-            X[k] = P[k, X[k + 1]]
-            Z[k] = V[k, X[k]]
+            X[k] = P[k + 1, X[k + 1]]
+            Z[k] = V[k + 1, X[k + 1]]
 
         return X, Z
 
@@ -242,8 +242,8 @@ class SegmentationHMM:
         Z[N - 1] = 0
 
         for k in range(N - 2, -1, -1):
-            X[k] = P[k, X[k + 1]]
-            Z[k] = V[k, X[k]]
+            X[k] = P[k + 1, X[k + 1]]
+            Z[k] = V[k + 1, X[k + 1]]
 
         return X, Z
 
