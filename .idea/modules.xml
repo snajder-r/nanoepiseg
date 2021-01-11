@@ -2,7 +2,9 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
+      <module fileurl="file://$PROJECT_DIR$/../MetH5Format/.idea/MetH5Format.iml" filepath="$PROJECT_DIR$/../MetH5Format/.idea/MetH5Format.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/nanoepiseg.iml" filepath="$PROJECT_DIR$/.idea/nanoepiseg.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../nanoepitools/.idea/nanoepitools.iml" filepath="$PROJECT_DIR$/../nanoepitools/.idea/nanoepitools.iml" />
     </modules>
   </component>
 </project>
