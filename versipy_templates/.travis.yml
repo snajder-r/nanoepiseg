@@ -1,0 +1,11 @@
+dist: xenial
+language: python
+python: __minimal_python__
+branches:
+  only:
+  - main
+
+install:
+  - pip install nanoepiseg
+
+script: true
