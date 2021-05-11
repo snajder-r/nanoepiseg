@@ -3,7 +3,7 @@ from typing import IO, Iterable
 
 from multiprocessing import Pool
 import pandas as pd
-from meth5.meth5_wrapper import MetH5File
+from meth5.meth5 import MetH5File
 
 
 def read_readgroups(readgroups_file: IO):
@@ -24,25 +24,20 @@ def read_readgroups(readgroups_file: IO):
     except Exception as e:
         logging.error("Unable to read read groups file", e)
         raise e
-
+    
     # Validation
     if len(read_groups.columns) == 2:
         should_colnames = ["read_name", "group"]
     elif len(read_groups.columns) == 3:
         should_colnames = ["read_name", "group", "group_set"]
     else:
-        logging.error(
-            "Invalid number of columns in read groups file (should be 2 or 3)"
-        )
+        logging.error("Invalid number of columns in read groups file (should be 2 or 3)")
         sys.exit(1)
-
+    
     if not all([col in read_groups.columns for col in should_colnames]):
-        logging.error(
-            "Invalid column names in read groups file (should be %s)"
-            % should_colnames.join(", ")
-        )
+        logging.error("Invalid column names in read groups file (should be %s)" % should_colnames.join(", "))
         sys.exit(1)
-
+    
     # Finished validation, now add group_set column if not present
     if "group_set" not in read_groups.columns:
         read_groups["group_set"] = 1
@@ -59,10 +54,10 @@ def chunked_segmentation(
 ):
     pool = Pool(workers)
     print(h5file)
-
+    
     print("Reading read groups")
     read_groups = read_readgroups(readgroups_file)
     if not include_nogroup:
         read_groups = read_groups.loc[read_groups["group"] != -1]
-
+    
     read_groups = read_groups.groupby("group_set")

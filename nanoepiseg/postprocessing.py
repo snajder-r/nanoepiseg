@@ -1,9 +1,9 @@
 import numpy as np
 
 
-def cleanup_segmentation(segment_p: np.ndarray, segments: np.ndarray,
-                         min_length: int = 5,
-                         min_parameter_diff=0.1) -> np.ndarray:
+def cleanup_segmentation(
+    segment_p: np.ndarray, segments: np.ndarray, min_length: int = 5, min_parameter_diff=0.1
+) -> np.ndarray:
     """
     Cleans up a segmentation by merging segments that are too close or too
     similar in their parameter space.
@@ -27,9 +27,8 @@ def cleanup_segmentation(segment_p: np.ndarray, segments: np.ndarray,
             cadidate_replace = new_segments[new_segments != segment][-1]
         else:
             cadidate_replace = segment + 1
-        absdif = np.abs(
-            segment_p[:, segment] - segment_p[:, cadidate_replace]).max()
+        absdif = np.abs(segment_p[:, segment] - segment_p[:, cadidate_replace]).max()
         if length < min_length or absdif < min_parameter_diff:
             new_segments[new_segments == segment] = cadidate_replace
-
+    
     return np.array(new_segments)

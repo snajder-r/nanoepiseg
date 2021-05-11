@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import IO, List, Tuple, Dict
 
 from multiprocessing import Pool
-from meth5.meth5_wrapper import (
+from meth5.meth5 import (
     MetH5File,
     MethlyationValuesContainer,
     ChromosomeContainer,
@@ -177,10 +177,7 @@ def segment(
     chunk_size: int,
 ):
     # Open HDF5 files
-    sample_h5f: Dict[str, MetH5File] = {
-        s: MetH5File(p, "r", chunk_size=chunk_size)
-        for s, p in sample_h5path.items()
-    }
+    sample_h5f: Dict[str, MetH5File] = {s: MetH5File(p, "r", chunk_size=chunk_size) for s, p in sample_h5path.items()}
     # Create dictionary of MethlyationValuesContainer objects for each sample
     sample_met_llrs: Dict[str, MethlyationValuesContainer] = {
         s: f[genomic_range[0]].get_values_in_range(genomic_range[1], genomic_range[2])
@@ -188,7 +185,7 @@ def segment(
         else None
         for s, f in sample_h5f.items()
     }
-
+    
     sparse_met_matrix = create_sparse_matrix_from_samples(sample_met_llrs)
     print(sparse_met_matrix.shape)
 
@@ -200,10 +197,10 @@ def multifile_segmentation(
     workers: int,
     chunk_size: int,
 ):
-
+    
     pool = Pool(workers)
     print(h5files)
-
+    
     # Parse and validate arguments
     genomic_range = genomic_range.split(":")
     chromosome = genomic_range[0]
@@ -223,13 +220,13 @@ def multifile_segmentation(
     else:
         start = 0
         end = sys.maxsize
-
+    
     # Validate h5 files
     h5files = [Path(f) for f in h5files]
     for f in h5files:
         if not f.exists() or not f.is_file():
             raise ValueError("Invalid HDF5 file, cannot read: \n  %s" % str(f))
-
+    
     if sample_names is not None:
         if len(sample_names) != len(h5files):
             raise ValueError(
@@ -238,5 +235,5 @@ def multifile_segmentation(
     else:
         # Sample names are none, infer from filenames
         sample_names = [f.stem for f in h5files]
-
+    
     segment(dict(zip(sample_names, h5files)), (chromosome, start, end), pool, chunk_size)
