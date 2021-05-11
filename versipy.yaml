@@ -6,7 +6,7 @@ version:
   b: null
   rc: null
   post: null
-  dev: 1
+  dev: 2
 managed_values:
   __package_name__: nanoepiseg
   __package_description__: Methylome segmentation algorithm using a changepoint detection
@@ -17,7 +17,7 @@ managed_values:
   __author_url__: https://github.com/snajder-r
   __package_licence__: MIT
   __package_licence_url__: https://opensource.org/licenses/MIT
-  __minimal_python__: '>=3.7'
+  __minimal_python__: '3.7'
   __entry_point1__: nanoepiseg=nanoepiseg.__main__:main
   __dependency1__: numpy>=1.19.2
   __dependency2__: scipy==1.4.1
