@@ -8,7 +8,7 @@ from nanoepiseg.hmm import SegmentationHMM
 from nanoepiseg.emissions import BernoulliPosterior
 import matplotlib.pyplot as plt
 import nanoepitools.plotting.plot_methylation_profile as nplt
-import nanoepitools.math as nmath
+import nanoepiseg.math as nmath
 
 
 def worker(obs, samples):

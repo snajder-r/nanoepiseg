@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Dict
 
 import numpy as np
 import scipy.optimize
@@ -241,7 +241,7 @@ class SegmentationHMM:
         it_hook=None,
         samples: np.ndarray = None,
         verbose: bool = False,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> Tuple[Dict[int, np.ndarray], np.ndarray]:
         """
         Run the baum_welch algorithm, an expectation maximization algorithm,
         to find a segmentation of the methylation signal.

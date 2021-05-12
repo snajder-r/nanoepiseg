@@ -24,11 +24,11 @@ def cleanup_segmentation(
             break
         length = (new_segments == segment).sum()
         if segment == new_segments[-1]:
-            cadidate_replace = new_segments[new_segments != segment][-1]
+            candidate_replace = new_segments[new_segments != segment][-1]
         else:
-            cadidate_replace = segment + 1
-        absdif = np.abs(segment_p[:, segment] - segment_p[:, cadidate_replace]).max()
+            candidate_replace = segment + 1
+        absdif = np.abs(segment_p[:, segment] - segment_p[:, candidate_replace]).max()
         if length < min_length or absdif < min_parameter_diff:
-            new_segments[new_segments == segment] = cadidate_replace
+            new_segments[new_segments == segment] = candidate_replace
     
     return np.array(new_segments)
