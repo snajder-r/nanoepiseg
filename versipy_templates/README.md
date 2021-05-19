@@ -11,3 +11,50 @@
 [![Anaconda Downloads](https://anaconda.org/snajder-r/nanoepiseg/badges/downloads.svg)](https://anaconda.org/snajder-r/meth5)
 
 NanoEpiSeg is a tool for *de novo* segmentation of  a methylome from read-level methylation calls (such as Nanopolish).
+
+NanoEpiSeg is currently in development. Please do not hesitate to report bugs or feature requests.
+
+A detailed documentation is in the works, stay tuned!
+## Prerequisites
+
+NanoEpiSeg assumes that your methylation calls are stored in [MetH5](http://github.com/snajder-r/meth5format) format.
+
+## Installation
+
+Through pip:
+
+```
+pip install nanoepiseg
+````
+
+Through anaconda:
+
+```
+conda install -c snajder-r nanoepiseg
+```
+
+## Usage
+
+NanoEpiSeg is meant to be parallelizable, which is why you would typically call nanoepiseg on a cluster system in parallel.
+In order to best accomplish load-balancing, it is done per hdf5 chunk. 
+
+You can list the number of chunks per chromosome via:
+
+```bash
+nanoepiseg list_chunks --m5file INPUT_FILE.m5
+```
+
+To then perform segmentation for a certain chunk, you can run:
+
+```bash
+nanoepiseg segment_h5 --m5file INPUT_FILE.m5 \
+    --out_tsv OUTPUT_FILE \ 
+    --reader_workers NUM_READER_WORKERS \ 
+    --workers NUM_SEGMENTATION_WORKERS \ 
+    --chromosome CHROMOSOME \
+    --chunks CHUNK1 [CHUNK2 ...]
+```
+
+There are further options available. Please check out the help to discover them.
+
+
