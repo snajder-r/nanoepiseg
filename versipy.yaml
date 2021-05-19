@@ -1,9 +1,9 @@
 version:
-  major: 0
-  minor: 1
+  major: 1
+  minor: 0
   micro: 0
   a: null
-  b: 3
+  b: 1
   rc: null
   post: null
   dev: null
@@ -23,7 +23,7 @@ managed_values:
   - numpy>=1.19.2
   - scipy==1.4.1
   - pandas>=1.1.3
-  - meth5>=0.3.1
+  - meth5>=0.2.7
   - tqdm>=4.60.0
   __classifiers__:
   - 'Development Status :: 3 - Alpha'

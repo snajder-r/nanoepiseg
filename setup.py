@@ -11,7 +11,7 @@ with open("README.md", "r") as fh:
 setup(
     name="nanoepiseg",
     description="Methylome segmentation algorithm using a changepoint detection HMM",
-    version="0.1.0b3",
+    version="1.0.0b1",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/snajder-r/nanoepiseg",
@@ -30,7 +30,7 @@ setup(
         "numpy>=1.19.2",
         "scipy==1.4.1",
         "pandas>=1.1.3",
-        "meth5>=0.3.1",
+        "meth5>=0.2.7",
         "tqdm>=4.60.0"
     ],
     packages=["nanoepiseg"],
