@@ -1,6 +1,6 @@
 import time
 from pathlib import Path
-from typing import IO, Iterable, List
+from typing import IO, Iterable, List, Optional
 from multiprocessing import Queue, Process
 import argparse
 import logging
@@ -17,49 +17,11 @@ from nanoepiseg.postprocessing import cleanup_segmentation
 from nanoepiseg.segments_csv_io import SegmentsWriterBED
 from nanoepiseg.math import llr_to_p
 
-if False:
-    
-    def read_readgroups(readgroups_file: IO):
-        """
-        Reads file that assigns read to read groups (such as haplotypes,
-        samples, clusters, etc)
-        :param readgroups_file: path to the tab-separated file
-        :return: pandas dataframe with columns "read_name", "group" and "group_set"
-        """
-        # Loading
-        try:
-            read_groups = pd.read_csv(
-                readgroups_file,
-                sep="\t",
-                header=0,
-                dtype={"read_name": str, "group": int, "group_set": "category"},
-            )
-        except Exception as e:
-            logging.error("Unable to read read groups file", e)
-            raise e
-        
-        # Validation
-        if len(read_groups.columns) == 2:
-            should_colnames = ["read_name", "group"]
-        elif len(read_groups.columns) == 3:
-            should_colnames = ["read_name", "group", "group_set"]
-        else:
-            logging.error("Invalid number of columns in read groups file (should be 2 or 3)")
-            sys.exit(1)
-        
-        if not all([col in read_groups.columns for col in should_colnames]):
-            logging.error("Invalid column names in read groups file (should be %s)" % should_colnames.join(", "))
-            sys.exit(1)
-        
-        # Finished validation, now add group_set column if not present
-        if "group_set" not in read_groups.columns:
-            read_groups["group_set"] = 1
-        return read_groups
-
 
 def worker_segment(input_queue: Queue, output_queue: Queue, chromosome: str, max_segments_per_window: int):
-    #import warnings
-    #warnings.filterwarnings('ignore')
+    import warnings
+    
+    warnings.filterwarnings("ignore")
     
     while True:
         job = input_queue.get()
@@ -67,15 +29,15 @@ def worker_segment(input_queue: Queue, output_queue: Queue, chromosome: str, max
             break
         
         sparse_matrix, fraction = job
-            
+        
         llrs = np.array(sparse_matrix.met_matrix.todense())
         obs = llr_to_p(llrs)
         samples = sparse_matrix.read_samples
         
         unique_samples = list(set(samples))
         
-        id_sample_dict = {i:s for i,s in enumerate(unique_samples)}
-        sample_id_dict = {v:k for k,v in id_sample_dict.items()}
+        id_sample_dict = {i: s for i, s in enumerate(unique_samples)}
+        sample_id_dict = {v: k for k, v in id_sample_dict.items()}
         
         sample_ids = [sample_id_dict[s] for s in samples]
         
@@ -86,7 +48,7 @@ def worker_segment(input_queue: Queue, output_queue: Queue, chromosome: str, max
         segment_p, posterior = hmm.baum_welch(obs, tol=np.exp(-8), samples=sample_ids)
         
         segmentation, _ = hmm.MAP(posterior)
-
+        
         segment_p_array = np.concatenate([v[np.newaxis, :] for v in segment_p.values()], axis=0)
         segmentation = cleanup_segmentation(segment_p_array, segmentation, min_parameter_diff=0.2)
         
@@ -97,20 +59,22 @@ def worker_segment(input_queue: Queue, output_queue: Queue, chromosome: str, max
         output_queue.put((result_tuple, fraction))
 
 
-def worker_output(output_queue: Queue, out_tsv_file: IO, chromosome:str, read_groups_key:str, print_diff_met:bool, quiet: bool):
+def worker_output(
+    output_queue: Queue, out_tsv_file: IO, chromosome: str, read_groups_key: str, print_diff_met: bool, quiet: bool
+):
     writer = SegmentsWriterBED(out_tsv_file, chromosome)
     with tqdm.tqdm(total=100) as pbar:
         while True:
             res = output_queue.get()
             if res is None:
                 break
-                
+            
             seg_result, fraction = res
             llrs, segments, genomic_locations, samples = seg_result
-
+            
             if read_groups_key is None:
                 samples = None
-                
+            
             writer.write_segments_llr(llrs, segments, genomic_locations, samples, compute_diffmet=print_diff_met)
             pbar.update(fraction)
         pbar.n = 100
@@ -125,14 +89,16 @@ def worker_reader(
     input_queue: Queue,
     chunks: List[int],
     progress_per_chunk: float,
-    read_groups_key:str
+    read_groups_key: str,
 ):
     with MetH5File(m5file, "r", chunk_size=chunk_size) as m5:
         chrom_container = m5[chromosome]
         
         for chunk in chunks:
             values_container = chrom_container.get_chunk(chunk)
-            met_matrix: SparseMethylationMatrixContainer = values_container.to_sparse_methylation_matrix(read_groups_key=read_groups_key)
+            met_matrix: SparseMethylationMatrixContainer = values_container.to_sparse_methylation_matrix(
+                read_read_names=False, read_groups_key=read_groups_key
+            )
             if read_groups_key is None:
                 met_matrix.read_samples = met_matrix.read_names
             total_sites = met_matrix.met_matrix.shape[0]
@@ -145,10 +111,14 @@ def worker_reader(
                 input_queue.put((sub_matrix, progress_per_window))
 
 
-def validate_selection(m5file: Path, chromosome: str, chunk_size: int, chunks: List[int]):
+def validate_chromosome_selection(m5file: Path, chromosome: str, chunk_size: int):
     with MetH5File(m5file, "r", chunk_size=chunk_size) as m5:
         if chromosome not in m5.get_chromosomes():
             raise ValueError(f"Chromosome {chromosome} not found in m5 file.")
+
+
+def validate_chunk_selection(m5file: Path, chromosome: str, chunk_size: int, chunks: List[int]):
+    with MetH5File(m5file, "r", chunk_size=chunk_size) as m5:
         num_chunks = m5[chromosome].get_number_of_chunks()
         if max(chunks) >= m5[chromosome].get_number_of_chunks():
             raise ValueError(f"Chunk {max(chunks)} not in chromosome. Must be in range {0}-{num_chunks-1}")
@@ -158,47 +128,67 @@ def main(
     m5file: Path,
     chromosome: str,
     chunk_size: int,
-    chunks: Iterable[int],
+    chunks: Optional[Iterable[int]],
     workers: int,
+    reader_workers: int,
     quiet: bool,
     out_tsv: IO,
     window_size: int,
     max_segments_per_window: int,
-    read_groups_key:str,
-    print_diff_met:bool
+    read_groups_key: str,
+    print_diff_met: bool,
 ):
     # TODO expose
     input_queue = Queue(maxsize=workers * 5)
     output_queue = Queue(maxsize=workers * 100)
     
-    # flatten chunk list, since we allow a list of chunks or a list of chunk ranges
-    # (which are converted to lists in parsing)
-    chunks = [chunk for subchunks in chunks for chunk in ([subchunks] if isinstance(subchunks, int) else subchunks)]
+    validate_chromosome_selection(m5file, chromosome, chunk_size)
+    
+    if chunks is None:
+        # No chunks have been provided, take all
+        with MetH5File(m5file, mode="r", chunk_size=chunk_size) as f:
+            chunks = list(range(f[chromosome].get_number_of_chunks()))
+    else:
+        # flatten chunk list, since we allow a list of chunks or a list of chunk ranges
+        # (which are converted to lists in parsing)
+        chunks = [chunk for subchunks in chunks for chunk in ([subchunks] if isinstance(subchunks, int) else subchunks)]
+    
+    validate_chunk_selection(m5file, chromosome, chunk_size, chunks)
+    
     # sort and make unique
-    
-    validate_selection(m5file, chromosome, chunk_size, chunks)
-    
     chunks = sorted(list(set(chunks)))
     progress_per_chunk = 100 / len(chunks)
     
-    segmentation_processes = [Process(target=worker_segment, args=(input_queue, output_queue, chromosome, max_segments_per_window))]
+    segmentation_processes = [
+        Process(target=worker_segment, args=(input_queue, output_queue, chromosome, max_segments_per_window))
+    ]
     for p in segmentation_processes:
         p.start()
     
-    # TODO expose reader workers
-    reader_workers = min(2, len(chunks))
+    reader_workers = min(reader_workers, len(chunks))
     chunk_per_process = np.array_split(chunks, reader_workers)
     reader_processes = [
         Process(
             target=worker_reader,
-            args=(m5file, chunk_size, chromosome, window_size, input_queue, p_chunks, progress_per_chunk, read_groups_key),
+            args=(
+                m5file,
+                chunk_size,
+                chromosome,
+                window_size,
+                input_queue,
+                p_chunks,
+                progress_per_chunk,
+                read_groups_key,
+            ),
         )
         for p_chunks in chunk_per_process
     ]
     for p in reader_processes:
         p.start()
     
-    output_process = Process(target=worker_output, args=(output_queue, out_tsv, chromosome, read_groups_key, print_diff_met, quiet))
+    output_process = Process(
+        target=worker_output, args=(output_queue, out_tsv, chromosome, read_groups_key, print_diff_met, quiet)
+    )
     output_process.start()
     
     for p in reader_processes:

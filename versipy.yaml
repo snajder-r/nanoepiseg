@@ -1,12 +1,12 @@
 version:
   major: 0
-  minor: 0
-  micro: 3
+  minor: 1
+  micro: 0
   a: null
-  b: null
+  b: 1
   rc: null
   post: null
-  dev: 3
+  dev: null
 managed_values:
   __package_name__: nanoepiseg
   __package_description__: Methylome segmentation algorithm using a changepoint detection

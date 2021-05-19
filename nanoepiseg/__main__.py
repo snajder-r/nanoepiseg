@@ -23,7 +23,7 @@ def argtype_chunks(value : str):
                 raise argparse.ArgumentTypeError(f"Argument 'chunks' must be space separated list of integers, or ranges in format 'from-to'. Can't parse '{value}'")
             return list(range(int(split[0]), int(split[1])))
         else:
-            return int(value)
+            return [int(value)]
     except:
         raise argparse.ArgumentTypeError(
             f"Argument 'chunks' must be space separated list of integers, or ranges in format 'from-to'. Can't parse '{value}'")
@@ -77,12 +77,14 @@ def main():
     )
     
     sc_args.add_argument(
-        "--workers",
+        "--reader_workers",
         type=int,
-        help="Number of worker processes",
-        default=10,
+        help="Number of processes for reading the input file. Recommended are at least half the number as there are worker processes",
+        default=2,
     )
-    
+
+    sc_args.add_argument("--workers", type=int, help="Number of worker processes", default=4, )
+
     sc_args.add_argument(
         "--m5file",
         required=True,
@@ -119,7 +121,6 @@ def main():
 
     sc_args.add_argument("--print_diff_met", action="store_true", help="Compute differential methylation p-values between read groups (i.e. samples/haplotypes) and include that information int he output file", )
 
-    
     args = parser.parse_args()
     args_dict = vars(args)
     # Remove arguments that the subcommand doesn't take
