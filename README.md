@@ -7,8 +7,8 @@
 
 [![PyPI version](https://badge.fury.io/py/nanoepiseg.svg)](https://badge.fury.io/py/nanoepiseg)
 [![PyPI downloads](https://pepy.tech/badge/nanoepiseg)](https://pepy.tech/project/nanoepiseg)
-[![Anaconda Version](https://anaconda.org/snajder-r/nanoepiseg/badges/version.svg)](https://anaconda.org/snajder-r/meth5)
-[![Anaconda Downloads](https://anaconda.org/snajder-r/nanoepiseg/badges/downloads.svg)](https://anaconda.org/snajder-r/meth5)
+[![Anaconda Version](https://img.shields.io/conda/v/snajder-r/nanoepiseg?color=blue)](https://anaconda.org/snajder-r/nanoepiseg)
+[![Anaconda Downloads](https://anaconda.org/snajder-r/nanoepiseg/badges/downloads.svg)](https://anaconda.org/snajder-r/nanoepiseg)
 
 NanoEpiSeg is a tool for *de novo* segmentation of  a methylome from read-level methylation calls (such as Nanopolish).
 
