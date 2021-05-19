@@ -1,4 +1,4 @@
-{% set version = "0.1.0b1" %}
+{% set version = "0.1.0b2" %}
 {% set name = "nanoepiseg" %}
 
 package:
