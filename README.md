@@ -1,4 +1,4 @@
-# NanoEpiSeg 1.0.0b1
+# NanoEpiSeg 1.0.0b3
 
 [![GitHub license](https://img.shields.io/github/license/snajder-r/nanoepiseg)](https://github.com/snajder-r/nanoepiseg/blob/master/LICENSE)
 [![Language](https://img.shields.io/badge/Language-Python3.7+-yellow.svg)](https://www.python.org/)
