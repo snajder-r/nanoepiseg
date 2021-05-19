@@ -30,7 +30,7 @@ setup(
         "numpy>=1.19.2",
         "scipy==1.4.1",
         "pandas>=1.1.3",
-        "meth5>=0.2.7"
+        "meth5>=0.3.1"
     ],
     packages=["nanoepiseg"],
     package_dir={"nanoepiseg": "nanoepiseg"},
