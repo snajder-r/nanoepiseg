@@ -1,5 +1,5 @@
 __name__ = "nanoepiseg"
-__version__ = "0.0.3.dev3"
+__version__ = "0.1.0b1"
 __description__ = "Methylome segmentation algorithm using a changepoint detection HMM"
 __url__ = "https://github.com/snajder-r/nanoepiseg"
 __licence__ = "MIT"
