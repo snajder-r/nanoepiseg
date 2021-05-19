@@ -18,7 +18,7 @@ build:
 
 requirements:
   build:
-    - python>=>=3.7
+    - python>=3.7
     - pip>=19.2.1
     - ripgrep>=11.0.1
   run:
