@@ -95,8 +95,7 @@ def worker_reader(
         chrom_container = m5[chromosome]
         
         for chunk in chunks:
-            #values_container = chrom_container.get_chunk(chunk)
-            values_container = chrom_container.get_values_in_range(29635443, 38824475)
+            values_container = chrom_container.get_chunk(chunk)
             met_matrix: SparseMethylationMatrixContainer = values_container.to_sparse_methylation_matrix(
                 read_read_names=False, read_groups_key=read_groups_key
             )
