@@ -95,19 +95,22 @@ def worker_reader(
         chrom_container = m5[chromosome]
         
         for chunk in chunks:
-            values_container = chrom_container.get_chunk(chunk)
+            #values_container = chrom_container.get_chunk(chunk)
+            values_container = chrom_container.get_values_in_range(29635443, 38824475)
             met_matrix: SparseMethylationMatrixContainer = values_container.to_sparse_methylation_matrix(
                 read_read_names=False, read_groups_key=read_groups_key
             )
+            print("CHUNK REGION", met_matrix.get_genomic_region())
             if read_groups_key is None:
                 met_matrix.read_samples = met_matrix.read_names
-            total_sites = met_matrix.met_matrix.shape[0]
+            total_sites = len(met_matrix.genomic_coord)
             num_windows = (total_sites // window_size) + 1
             progress_per_window = progress_per_chunk / num_windows
-            for window_start in range(0, total_sites, window_size):
+            for window_start in range(0, total_sites+1, window_size):
                 window_end = window_start + window_size
                 # logging.debug(f"Submitting window {window_start}-{window_end}")
                 sub_matrix = met_matrix.get_submatrix(window_start, window_end)
+                print(f"Submitting window {sub_matrix.get_genomic_region()}")
                 input_queue.put((sub_matrix, progress_per_window))
 
 
