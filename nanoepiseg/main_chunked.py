@@ -39,7 +39,7 @@ def worker_segment(input_queue: Queue, output_queue: Queue, chromosome: str, max
         id_sample_dict = {i: s for i, s in enumerate(unique_samples)}
         sample_id_dict = {v: k for k, v in id_sample_dict.items()}
         
-        sample_ids = [sample_id_dict[s] for s in samples]
+        sample_ids = np.array([sample_id_dict[s] for s in samples])
         
         emission_lik = BernoulliPosterior(len(unique_samples), max_segments_per_window, prior_a=None)
         hmm = SegmentationHMM(
