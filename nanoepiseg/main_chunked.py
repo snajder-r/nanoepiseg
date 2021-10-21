@@ -99,7 +99,6 @@ def worker_reader(
             met_matrix: SparseMethylationMatrixContainer = values_container.to_sparse_methylation_matrix(
                 read_read_names=False, read_groups_key=read_groups_key
             )
-            print("CHUNK REGION", met_matrix.get_genomic_region())
             if read_groups_key is None:
                 met_matrix.read_samples = met_matrix.read_names
             total_sites = len(met_matrix.genomic_coord)
