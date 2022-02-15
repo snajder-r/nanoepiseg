@@ -1,25 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" serverName="r933r@odcf-worker01:22" autoUploadExternalChanges="true">
+  <component name="PublishConfigData" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
-      <paths name="ebi-cli via localhost:2222">
+      <paths name="worker01">
         <serverdata>
           <mappings>
-            <mapping local="$PROJECT_DIR$" web="/" />
-          </mappings>
-        </serverdata>
-      </paths>
-      <paths name="r933r@odcf-worker01:22">
-        <serverdata>
-          <mappings>
-            <mapping deploy="/home/r933r/code/nanoepiseg" local="$PROJECT_DIR$" />
-          </mappings>
-        </serverdata>
-      </paths>
-      <paths name="r933r@odcf-worker01:22 agent">
-        <serverdata>
-          <mappings>
-            <mapping local="$PROJECT_DIR$" web="/" />
+            <mapping deploy="/code/nanoepiseg" local="$PROJECT_DIR$" web="/" />
           </mappings>
         </serverdata>
       </paths>

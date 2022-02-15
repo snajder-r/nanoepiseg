@@ -16,9 +16,10 @@ from nanoepiseg.hmm import SegmentationHMM
 from nanoepiseg.postprocessing import cleanup_segmentation
 from nanoepiseg.segments_csv_io import SegmentsWriterBED
 from nanoepiseg.math import llr_to_p
+from nanoepiseg.segment import segment
 
 
-def worker_segment(input_queue: Queue, output_queue: Queue, chromosome: str, max_segments_per_window: int):
+def worker_segment(input_queue: Queue, output_queue: Queue, max_segments_per_window: int):
     import warnings
     
     warnings.filterwarnings("ignore")
@@ -29,38 +30,14 @@ def worker_segment(input_queue: Queue, output_queue: Queue, chromosome: str, max
             break
         
         sparse_matrix, fraction = job
-        
         llrs = np.array(sparse_matrix.met_matrix.todense())
-        obs = llr_to_p(llrs)
-        samples = sparse_matrix.read_samples
-        
-        unique_samples = list(set(samples))
-        
-        id_sample_dict = {i: s for i, s in enumerate(unique_samples)}
-        sample_id_dict = {v: k for k, v in id_sample_dict.items()}
-        
-        sample_ids = [sample_id_dict[s] for s in samples]
-        
-        emission_lik = BernoulliPosterior(len(unique_samples), max_segments_per_window, prior_a=None)
-        hmm = SegmentationHMM(
-            max_segments=max_segments_per_window, t_stay=0.1, t_move=0.8, e_fn=emission_lik, eps=np.exp(-512)
-        )
-        segment_p, posterior = hmm.baum_welch(obs, tol=np.exp(-8), samples=sample_ids)
-        
-        segmentation, _ = hmm.MAP(posterior)
-        
-        segment_p_array = np.concatenate([v[np.newaxis, :] for v in segment_p.values()], axis=0)
-        segmentation = cleanup_segmentation(segment_p_array, segmentation, min_parameter_diff=0.2)
-        
-        used_segments = list(set(segmentation))
-        
+        segmentation = segment(sparse_matrix, max_segments_per_window)
         result_tuple = (llrs, segmentation, sparse_matrix.genomic_coord, sparse_matrix.read_samples)
-        
         output_queue.put((result_tuple, fraction))
 
 
 def worker_output(
-    output_queue: Queue, out_tsv_file: IO, chromosome: str, read_groups_key: str, print_diff_met: bool, quiet: bool
+    output_queue: Queue, out_tsv_file: IO, chromosome: str, read_groups_keys: str, print_diff_met: bool, quiet: bool
 ):
     writer = SegmentsWriterBED(out_tsv_file, chromosome)
     with tqdm.tqdm(total=100) as pbar:
@@ -72,7 +49,7 @@ def worker_output(
             seg_result, fraction = res
             llrs, segments, genomic_locations, samples = seg_result
             
-            if read_groups_key is None:
+            if read_groups_keys is None:
                 samples = None
             
             writer.write_segments_llr(llrs, segments, genomic_locations, samples, compute_diffmet=print_diff_met)
@@ -82,34 +59,61 @@ def worker_output(
 
 
 def worker_reader(
-    m5file: Path,
+    m5files: List[Path],
     chunk_size: int,
     chromosome: str,
     window_size: int,
     input_queue: Queue,
     chunks: List[int],
     progress_per_chunk: float,
-    read_groups_key: str,
+    read_groups_keys: List[str],
 ):
-    with MetH5File(m5file, "r", chunk_size=chunk_size) as m5:
+    firstfile = m5files[0]
+    with MetH5File(firstfile, "r", chunk_size=chunk_size) as m5:
         chrom_container = m5[chromosome]
-        
         for chunk in chunks:
             values_container = chrom_container.get_chunk(chunk)
             met_matrix: SparseMethylationMatrixContainer = values_container.to_sparse_methylation_matrix(
-                read_read_names=False, read_groups_key=read_groups_key
+                read_read_names=False, read_groups_key=read_groups_keys
             )
-            print("CHUNK REGION", met_matrix.get_genomic_region())
-            if read_groups_key is None:
+            
+            if len(m5files) > 0:
+                if read_groups_keys is None:
+                    met_matrix.read_samples = np.array([f"{firstfile.name}" for _ in met_matrix.read_names])
+                else:
+                    met_matrix.read_samples = np.array([f"{firstfile.name}_{sn}" for sn in met_matrix.read_samples])
+            
+            for other_m5file in m5files[1:]:
+                with MetH5File(other_m5file, "r", chunk_size=chunk_size) as other_m5:
+                    other_ranges = values_container.get_ranges()
+                    other_values_container = other_m5[chromosome].get_values_in_range(
+                        other_ranges[0, 0], other_ranges[-1, 1]
+                    )
+                    other_met_matrix = other_values_container.to_sparse_methylation_matrix(
+                        read_read_names=False, read_groups_key=read_groups_keys
+                    )
+                    if read_groups_keys is None:
+                        other_met_matrix.read_samples = np.array(
+                            [f"{other_m5file.name}" for _ in other_met_matrix.read_names]
+                        )
+                    else:
+                        other_met_matrix.read_samples = np.array(
+                            [f"{other_m5file.name}_{sn}" for sn in other_met_matrix.read_samples]
+                        )
+                    met_matrix = met_matrix.merge(other_met_matrix, sample_names_mode="keep")
+            
+            if read_groups_keys is None and len(m5files) == 1:
                 met_matrix.read_samples = met_matrix.read_names
             total_sites = len(met_matrix.genomic_coord)
             num_windows = (total_sites // window_size) + 1
             progress_per_window = progress_per_chunk / num_windows
-            for window_start in range(0, total_sites+1, window_size):
+            for window_start in range(0, total_sites + 1, window_size):
                 window_end = window_start + window_size
                 # logging.debug(f"Submitting window {window_start}-{window_end}")
                 sub_matrix = met_matrix.get_submatrix(window_start, window_end)
-                print(f"Submitting window {sub_matrix.get_genomic_region()}")
+                print(
+                    f"Submitting window {sub_matrix.get_genomic_region()} with dimensions {sub_matrix.met_matrix.shape}"
+                )
                 input_queue.put((sub_matrix, progress_per_window))
 
 
@@ -127,7 +131,7 @@ def validate_chunk_selection(m5file: Path, chromosome: str, chunk_size: int, chu
 
 
 def main(
-    m5file: Path,
+    m5files: List[Path],
     chromosome: str,
     chunk_size: int,
     chunks: Optional[Iterable[int]],
@@ -137,33 +141,34 @@ def main(
     out_tsv: IO,
     window_size: int,
     max_segments_per_window: int,
-    read_groups_key: str,
+    read_groups_keys: List[str],
     print_diff_met: bool,
 ):
     # TODO expose
     input_queue = Queue(maxsize=workers * 5)
     output_queue = Queue(maxsize=workers * 100)
     
-    validate_chromosome_selection(m5file, chromosome, chunk_size)
+    for m5file in m5files:
+        validate_chromosome_selection(m5file, chromosome, chunk_size)
     
+    firstm5 = m5files[0]
     if chunks is None:
         # No chunks have been provided, take all
-        with MetH5File(m5file, mode="r", chunk_size=chunk_size) as f:
+        with MetH5File(firstm5, mode="r", chunk_size=chunk_size) as f:
             chunks = list(range(f[chromosome].get_number_of_chunks()))
+            print("Chunks: ", chunks)
     else:
         # flatten chunk list, since we allow a list of chunks or a list of chunk ranges
         # (which are converted to lists in parsing)
         chunks = [chunk for subchunks in chunks for chunk in ([subchunks] if isinstance(subchunks, int) else subchunks)]
     
-    validate_chunk_selection(m5file, chromosome, chunk_size, chunks)
+    validate_chunk_selection(firstm5, chromosome, chunk_size, chunks)
     
     # sort and make unique
     chunks = sorted(list(set(chunks)))
     progress_per_chunk = 100 / len(chunks)
     
-    segmentation_processes = [
-        Process(target=worker_segment, args=(input_queue, output_queue, chromosome, max_segments_per_window))
-    ]
+    segmentation_processes = [Process(target=worker_segment, args=(input_queue, output_queue, max_segments_per_window))]
     for p in segmentation_processes:
         p.start()
     
@@ -173,14 +178,14 @@ def main(
         Process(
             target=worker_reader,
             args=(
-                m5file,
+                m5files,
                 chunk_size,
                 chromosome,
                 window_size,
                 input_queue,
                 p_chunks,
                 progress_per_chunk,
-                read_groups_key,
+                read_groups_keys,
             ),
         )
         for p_chunks in chunk_per_process
@@ -189,7 +194,7 @@ def main(
         p.start()
     
     output_process = Process(
-        target=worker_output, args=(output_queue, out_tsv, chromosome, read_groups_key, print_diff_met, quiet)
+        target=worker_output, args=(output_queue, out_tsv, chromosome, read_groups_keys, print_diff_met, quiet)
     )
     output_process.start()
     
@@ -203,6 +208,6 @@ def main(
     for p in segmentation_processes:
         p.join()
     
-    # Deal poison pill to segmentation workers
+    # Deal poison pill to writer worker
     output_queue.put(None)
     output_process.join()

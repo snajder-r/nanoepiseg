@@ -15,18 +15,23 @@ def argtype_M5File(value):
         raise argparse.ArgumentTypeError(f"Failed to read '{value}'. Is it a valid MetH5 file?")
     return Path(value)
 
-def argtype_chunks(value : str):
+
+def argtype_chunks(value: str):
     try:
         if "-" in value:
             split = value.split("-")
             if len(split) != 2:
-                raise argparse.ArgumentTypeError(f"Argument 'chunks' must be space separated list of integers, or ranges in format 'from-to'. Can't parse '{value}'")
+                raise argparse.ArgumentTypeError(
+                    f"Argument 'chunks' must be space separated list of integers, or ranges in format 'from-to', or 'all'. Can't parse '{value}'"
+                )
             return list(range(int(split[0]), int(split[1])))
         else:
             return [int(value)]
     except:
         raise argparse.ArgumentTypeError(
-            f"Argument 'chunks' must be space separated list of integers, or ranges in format 'from-to'. Can't parse '{value}'")
+            f"Argument 'chunks' must be space separated list of integers, or ranges in format 'from-to', or 'all'. Can't parse '{value}'"
+        )
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -82,13 +87,19 @@ def main():
         help="Number of processes for reading the input file. Recommended are at least half the number as there are worker processes",
         default=2,
     )
-
-    sc_args.add_argument("--workers", type=int, help="Number of worker processes", default=4, )
-
+    
     sc_args.add_argument(
-        "--m5file",
+        "--workers",
+        type=int,
+        help="Number of worker processes",
+        default=4,
+    )
+    
+    sc_args.add_argument(
+        "--m5files",
         required=True,
         type=argtype_M5File,
+        nargs="+",
         help="MetH5 file containing methylation calls",
     )
     
@@ -102,7 +113,11 @@ def main():
     )
     
     sc_args.add_argument(
-        "--window_size", type=int, required=False, default=300, help="Window size for segmentation algorithm (number of CpGs)."
+        "--window_size",
+        type=int,
+        required=False,
+        default=300,
+        help="Window size for segmentation algorithm (number of CpGs).",
     )
     sc_args.add_argument(
         "--max_segments_per_window",
@@ -113,14 +128,19 @@ def main():
     )
     
     sc_args.add_argument(
-        "--read_groups_key",
+        "--read_groups_keys",
         type=str,
         required=False,
-        help="If the H5 files is tagged with read groups, provide the read group key here. If done so, methylation rates will be modeled per read group instead of per read.",
+        nargs="+",
+        help="If the H5 files is tagged with read groups, provide the read group keys here. If done so, methylation rates will be modeled per read group (or if more than one is provided: per read group combination) instead of per read.",
     )
-
-    sc_args.add_argument("--print_diff_met", action="store_true", help="Compute differential methylation p-values between read groups (i.e. samples/haplotypes) and include that information int he output file", )
-
+    
+    sc_args.add_argument(
+        "--print_diff_met",
+        action="store_true",
+        help="Compute differential methylation p-values between read groups (i.e. samples/haplotypes) and include that information int he output file",
+    )
+    
     args = parser.parse_args()
     args_dict = vars(args)
     # Remove arguments that the subcommand doesn't take
@@ -132,5 +152,3 @@ def main():
         subcommand(**args_dict)
     except ValueError as e:
         logging.error(str(e))
-        
-    
