@@ -50,7 +50,7 @@ def worker_segment(input_queue: Queue, output_queue: Queue, chromosome: str, max
         segmentation, _ = hmm.MAP(posterior)
         
         segment_p_array = np.concatenate([v[np.newaxis, :] for v in segment_p.values()], axis=0)
-        segmentation = cleanup_segmentation(segment_p_array, segmentation, min_parameter_diff=0.2)
+        #segmentation = cleanup_segmentation(segment_p_array, segmentation, min_parameter_diff=0.2)
         
         used_segments = list(set(segmentation))
         
@@ -60,7 +60,7 @@ def worker_segment(input_queue: Queue, output_queue: Queue, chromosome: str, max
 
 
 def worker_output(
-    output_queue: Queue, out_tsv_file: IO, chromosome: str, read_groups_key: str, print_diff_met: bool, quiet: bool
+    output_queue: Queue, out_tsv_file: IO, chromosome: str, read_groups_keys: str, print_diff_met: bool, quiet: bool
 ):
     writer = SegmentsWriterBED(out_tsv_file, chromosome)
     with tqdm.tqdm(total=100) as pbar:
@@ -72,7 +72,7 @@ def worker_output(
             seg_result, fraction = res
             llrs, segments, genomic_locations, samples = seg_result
             
-            if read_groups_key is None:
+            if read_groups_keys is None:
                 samples = None
             
             writer.write_segments_llr(llrs, segments, genomic_locations, samples, compute_diffmet=print_diff_met)
@@ -89,7 +89,7 @@ def worker_reader(
     input_queue: Queue,
     chunks: List[int],
     progress_per_chunk: float,
-    read_groups_key: str,
+    read_groups_keys: List[str],
 ):
     with MetH5File(m5file, "r", chunk_size=chunk_size) as m5:
         chrom_container = m5[chromosome]
@@ -97,9 +97,9 @@ def worker_reader(
         for chunk in chunks:
             values_container = chrom_container.get_chunk(chunk)
             met_matrix: SparseMethylationMatrixContainer = values_container.to_sparse_methylation_matrix(
-                read_read_names=False, read_groups_key=read_groups_key
+                read_read_names=False, read_groups_key=read_groups_keys
             )
-            if read_groups_key is None:
+            if read_groups_keys is None:
                 met_matrix.read_samples = met_matrix.read_names
             total_sites = len(met_matrix.genomic_coord)
             num_windows = (total_sites // window_size) + 1
@@ -136,7 +136,7 @@ def main(
     out_tsv: IO,
     window_size: int,
     max_segments_per_window: int,
-    read_groups_key: str,
+    read_groups_keys: List[str],
     print_diff_met: bool,
 ):
     # TODO expose
@@ -179,7 +179,7 @@ def main(
                 input_queue,
                 p_chunks,
                 progress_per_chunk,
-                read_groups_key,
+                read_groups_keys,
             ),
         )
         for p_chunks in chunk_per_process
@@ -188,7 +188,7 @@ def main(
         p.start()
     
     output_process = Process(
-        target=worker_output, args=(output_queue, out_tsv, chromosome, read_groups_key, print_diff_met, quiet)
+        target=worker_output, args=(output_queue, out_tsv, chromosome, read_groups_keys, print_diff_met, quiet)
     )
     output_process.start()
     

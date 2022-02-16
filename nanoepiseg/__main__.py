@@ -113,10 +113,11 @@ def main():
     )
     
     sc_args.add_argument(
-        "--read_groups_key",
+        "--read_groups_keys",
         type=str,
         required=False,
-        help="If the H5 files is tagged with read groups, provide the read group key here. If done so, methylation rates will be modeled per read group instead of per read.",
+        nargs="+",
+        help="If the H5 files is tagged with read groups, provide the read group keys here. If done so, methylation rates will be modeled per read group (or if more than one is provided: per read group combination) instead of per read.",
     )
 
     sc_args.add_argument("--print_diff_met", action="store_true", help="Compute differential methylation p-values between read groups (i.e. samples/haplotypes) and include that information int he output file", )
