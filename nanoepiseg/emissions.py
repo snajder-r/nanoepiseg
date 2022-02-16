@@ -81,7 +81,10 @@ class BernoulliPosterior(EmissionLikelihoodFunction):
         if self.prior_a is not None:
             # Precompute the normfactor (in log space) of the prior gamma
             # distribution
-            self.prior_lognormfactor = np.log(math.gamma(2 * prior_a) / (math.gamma(prior_a) ** 2))
+            self.prior_lognormfactor = np.log(math.gamma(2 * prior_a) / (math.gamma(prior_a) ** 2))*2
+            self.prior_pdf = scipy.stats.beta(self.prior_a, self.prior_a).pdf
+        else:
+            self.prior_pdf = None
     
     def update_prior(self):
         """
@@ -89,6 +92,7 @@ class BernoulliPosterior(EmissionLikelihoodFunction):
         self.segment_p and self.prior_a
         """
         self.segment_prior = self.segment_p * (self.prior_a - 1)
+        
         self.segment_prior += np.log(1 - np.exp(self.segment_p) + self.eps) * (self.prior_a - 1)
         self.segment_prior += self.prior_lognormfactor
     
@@ -155,7 +159,12 @@ class BernoulliPosterior(EmissionLikelihoodFunction):
                 ps += pki.sum(axis=0)
             
             ret = ls / (ps + self.eps)
+            if self.prior_pdf is not None:
+                prior = np.array([self.prior_pdf(xi) for xi in x])
+                ret = ret * prior
+            
             ret = ret.sum()
+            
             return -ret
         
         return curried_objective
