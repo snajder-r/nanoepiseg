@@ -1,3 +1,8 @@
+# Deprecation note
+
+Nanoepiseg has now been fully integrated in [PycoMeth](http://github.com/snajder-r/pycometh) as the `Meth_Seg` subcommand.
+
+
 # NanoEpiSeg 1.0.0b3
 
 [![GitHub license](https://img.shields.io/github/license/snajder-r/nanoepiseg)](https://github.com/snajder-r/nanoepiseg/blob/master/LICENSE)
